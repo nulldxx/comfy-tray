@@ -28,6 +28,7 @@ internal sealed class ComfyServerManager : IDisposable
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:DisposableFieldsShouldBeDisposed", Justification = "Disposed via Stop(), which Dispose() calls.")]
     private Process? _process;
+    private OutputWatcher? _outputWatcher;
     private bool _stopping;
 
     public ComfyState State { get; private set; } = ComfyState.Stopped;
@@ -120,6 +121,9 @@ internal sealed class ComfyServerManager : IDisposable
 
             _process = process;
             SetStateLocked(ComfyState.Running);
+
+            _outputWatcher = new OutputWatcher(config.ResolvedOutputDirectory, AppendLog);
+            _outputWatcher.Start();
         }
     }
 
@@ -128,6 +132,7 @@ internal sealed class ComfyServerManager : IDisposable
     public void Stop()
     {
         Process? process;
+        OutputWatcher? watcher;
         lock (_gate)
         {
             process = _process;
@@ -138,8 +143,11 @@ internal sealed class ComfyServerManager : IDisposable
 
             _stopping = true;
             _process = null;
+            watcher = _outputWatcher;
+            _outputWatcher = null;
         }
 
+        watcher?.Stop();
         AppendLog("[comfy-tray] stopping server...");
         try
         {
@@ -174,6 +182,7 @@ internal sealed class ComfyServerManager : IDisposable
 
     private void OnProcessExited(object? sender, EventArgs e)
     {
+        OutputWatcher? watcher;
         lock (_gate)
         {
             // Stop() handles its own state transition; ignore the resulting Exited.
@@ -186,8 +195,12 @@ internal sealed class ComfyServerManager : IDisposable
             _process.Dispose();
             _process = null;
             AppendLog($"[comfy-tray] server exited unexpectedly (exit code {code}).");
+            watcher = _outputWatcher;
+            _outputWatcher = null;
             SetStateLocked(ComfyState.Stopped);
         }
+
+        watcher?.Stop();
     }
 
     private static int SafeExitCode(Process p)

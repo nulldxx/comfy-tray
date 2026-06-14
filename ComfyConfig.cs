@@ -66,6 +66,8 @@ internal sealed class ComfyConfig
 
     public string ResolvedMainScript => Expand(MainScript);
 
+    public string ResolvedOutputDirectory => Expand(OutputDirectory);
+
     public string ResolvedWorkingDirectory =>
         string.IsNullOrWhiteSpace(WorkingDirectory)
             ? (Path.GetDirectoryName(ResolvedMainScript) ?? ".")
