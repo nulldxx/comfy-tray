@@ -187,7 +187,9 @@ internal sealed class ComfyServerManager : IDisposable
         lock (_gate)
         {
             // Stop() handles its own state transition; ignore the resulting Exited.
-            if (_stopping || _process == null)
+            // ReferenceEquals guards against a stale callback from a previous process
+            // firing after Stop()+Start() have already replaced _process.
+            if (_stopping || _process == null || !ReferenceEquals(sender, _process))
             {
                 return;
             }

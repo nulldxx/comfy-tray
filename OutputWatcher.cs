@@ -64,8 +64,12 @@ internal sealed class OutputWatcher : IDisposable
 
     public void Dispose() => Stop();
 
-    private void OnCreated(object sender, FileSystemEventArgs e) =>
-        _ = DeleteAfterDelayAsync(e.FullPath, _cts?.Token ?? CancellationToken.None);
+    private void OnCreated(object sender, FileSystemEventArgs e)
+    {
+        var cts = _cts;
+        if (cts == null) return;
+        _ = DeleteAfterDelayAsync(e.FullPath, cts.Token);
+    }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "File deletion is best-effort; any failure (locked, already gone, permissions) is logged, not thrown.")]
     private async Task DeleteAfterDelayAsync(string path, CancellationToken token)

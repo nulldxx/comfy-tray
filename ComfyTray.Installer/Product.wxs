@@ -3,7 +3,7 @@
   <?define ProductVersion="1.0.0.0" ?>
   <?define ProductName="ComfyUI Tray" ?>
   <?define Manufacturer="ComfyUI Tray" ?>
-  <?define UpgradeCode="F1E2D3C4-B5A6-4978-8A6B-5C4D3E2F1A0B" ?>
+  <?define UpgradeCode="AB6EE5DF-3A05-478E-92A7-49E82533AEB7" ?>
 
   <Product Id="*"
            Name="$(var.ProductName)"
@@ -39,7 +39,7 @@
 
     <!-- Components -->
     <DirectoryRef Id="INSTALLFOLDER">
-      <Component Id="ComfyTrayExe" Guid="{DA1B2C3D-4E5F-6A7B-8C9D-0E1F2A3B4C5D}">
+      <Component Id="ComfyTrayExe" Guid="{06097700-8AE3-4AAE-90BB-03C28C7F9B9D}">
         <File Id="ComfyTrayEXE"
               Source="$(var.ComfyTray.TargetDir)ComfyTray.exe"
               KeyPath="yes"
@@ -53,13 +53,13 @@
       </Component>
 
       <!-- NuGet Dependencies - H.NotifyIcon -->
-      <Component Id="HNotifyIcon" Guid="{EB2C3D4E-5F6A-7B8C-9D0E-1F2A3B4C5D6E}">
+      <Component Id="HNotifyIcon" Guid="{7314F763-4B74-4191-BA5C-D6130DEBBEE6}">
         <File Id="HNotifyIconWpfDll"
               Source="$(var.ComfyTray.TargetDir)H.NotifyIcon.Wpf.dll"
               KeyPath="yes" />
       </Component>
 
-      <Component Id="HNotifyIconCore" Guid="{FC3D4E5F-6A7B-8C9D-0E1F-2A3B4C5D6E7F}">
+      <Component Id="HNotifyIconCore" Guid="{0984632A-088A-4F72-B0E9-486EF7989AE3}">
         <File Id="HNotifyIconDll"
               Source="$(var.ComfyTray.TargetDir)H.NotifyIcon.dll"
               KeyPath="yes" />
@@ -68,7 +68,7 @@
 
     <!-- Icons folder component -->
     <DirectoryRef Id="IconsFolder">
-      <Component Id="IconsComponent" Guid="{AD0E1F2A-3B4C-5D6E-7F8A-9B0C1D2E3F4A}">
+      <Component Id="IconsComponent" Guid="{EDAE4C34-8B83-4DD9-9170-0D9E451FF154}">
         <File Id="AppIco"
               Source="$(var.ComfyTray.TargetDir)icons\app.ico"
               KeyPath="yes" />
