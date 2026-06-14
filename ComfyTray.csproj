@@ -7,7 +7,7 @@
     <ApplicationIcon>icons\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <NoWarn>$(NoWarn);NETSDK1233</NoWarn>
-    <DefaultItemExcludes>$(DefaultItemExcludes);SampleTrayApp.Tests\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);ComfyTray.Tests\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>

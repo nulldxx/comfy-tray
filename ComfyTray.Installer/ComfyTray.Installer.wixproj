@@ -6,7 +6,7 @@
     <ProductVersion>3.11</ProductVersion>
     <ProjectGuid>{12345678-ABCD-EF01-2345-6789ABCDEF01}</ProjectGuid>
     <SchemaVersion>2.0</SchemaVersion>
-    <OutputName>SampleTrayAppSetup</OutputName>
+    <OutputName>ComfyTraySetup</OutputName>
     <OutputType>Package</OutputType>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
@@ -32,8 +32,8 @@
     </WixExtension>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\SampleTrayApp.csproj">
-      <Name>SampleTrayApp</Name>
+    <ProjectReference Include="..\ComfyTray.csproj">
+      <Name>ComfyTray</Name>
       <Project>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</Project>
       <Private>True</Private>
       <DoNotHarvest>True</DoNotHarvest>

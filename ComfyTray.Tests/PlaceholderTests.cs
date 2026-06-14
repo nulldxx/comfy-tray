@@ -1,6 +1,6 @@
 using Xunit;
 
-namespace SampleTrayApp.Tests;
+namespace ComfyTray.Tests;
 
 public class PlaceholderTests
 {

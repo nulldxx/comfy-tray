@@ -3,7 +3,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace SampleTrayApp;
+namespace ComfyTray;
 
 /// <summary>
 /// Launch configuration for the ComfyUI server. Values may contain Windows

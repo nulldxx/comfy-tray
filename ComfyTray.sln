@@ -2,11 +2,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SampleTrayApp", "SampleTrayApp.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ComfyTray", "ComfyTray.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
 EndProject
-Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "SampleTrayApp.Installer", "SampleTrayApp.Installer\SampleTrayApp.Installer.wixproj", "{12345678-ABCD-EF01-2345-6789ABCDEF01}"
+Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "ComfyTray.Installer", "ComfyTray.Installer\ComfyTray.Installer.wixproj", "{12345678-ABCD-EF01-2345-6789ABCDEF01}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SampleTrayApp.Tests", "SampleTrayApp.Tests\SampleTrayApp.Tests.csproj", "{B2C3D4E5-F6A7-8901-BCDE-F12345678901}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ComfyTray.Tests", "ComfyTray.Tests\ComfyTray.Tests.csproj", "{B2C3D4E5-F6A7-8901-BCDE-F12345678901}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

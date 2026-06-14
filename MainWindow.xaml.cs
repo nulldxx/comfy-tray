@@ -3,7 +3,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Media.Imaging;
 
-namespace SampleTrayApp;
+namespace ComfyTray;
 
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Instantiated by WPF XAML framework")]
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001:TypesThatOwnDisposableFieldsShouldBeDisposable", Justification = "WPF Window lifetime is framework-managed; the server is disposed on Exit.")]

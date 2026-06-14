@@ -5,7 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
-namespace SampleTrayApp;
+namespace ComfyTray;
 
 internal enum ComfyState
 {

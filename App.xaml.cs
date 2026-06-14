@@ -1,6 +1,6 @@
 using System.Windows;
 
-namespace SampleTrayApp;
+namespace ComfyTray;
 
 internal sealed partial class App : Application
 {

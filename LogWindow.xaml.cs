@@ -2,7 +2,7 @@ using System;
 using System.Text;
 using System.Windows;
 
-namespace SampleTrayApp;
+namespace ComfyTray;
 
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Instantiated from MainWindow")]
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001:TypesThatOwnDisposableFieldsShouldBeDisposable", Justification = "The server is owned by MainWindow, not this view; only referenced here.")]
