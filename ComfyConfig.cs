@@ -15,7 +15,7 @@ internal sealed class ComfyConfig
 {
     /// <summary>Full path to the Python interpreter that runs the server.</summary>
     public string PythonPath { get; set; } =
-        @"%APPDATA%\uv\python\cpython-3.12.9-windows-x86_64-none\python.exe";
+        @"%USERPROFILE%\Documents\ComfyUI\.venv\Scripts\python.exe";
 
     /// <summary>Path to ComfyUI's <c>main.py</c>.</summary>
     public string MainScript { get; set; } =
