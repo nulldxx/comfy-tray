@@ -152,6 +152,13 @@ internal sealed class ComfyConfig
         }
     }
 
+    // Migrations: old default value → replaced by the current default on load.
+    private static readonly (string Old, string New)[] PythonPathMigrations =
+    [
+        (@"%APPDATA%\uv\python\cpython-3.12.9-windows-x86_64-none\python.exe",
+         @"%USERPROFILE%\Documents\ComfyUI\.venv\Scripts\python.exe"),
+    ];
+
     /// <summary>
     /// Loads config from <see cref="ConfigPath"/>, creating it with defaults if it
     /// does not exist. Falls back to in-memory defaults if the file is unreadable.
@@ -169,6 +176,7 @@ internal sealed class ComfyConfig
                 var cfg = JsonSerializer.Deserialize<ComfyConfig>(json, SerializerOptions);
                 if (cfg != null)
                 {
+                    cfg.Migrate();
                     return cfg;
                 }
 
@@ -183,6 +191,25 @@ internal sealed class ComfyConfig
         {
             loadError = $"Failed to read config ({path}): {ex.Message}. Using defaults.";
             return new ComfyConfig();
+        }
+    }
+
+    private void Migrate()
+    {
+        bool changed = false;
+        foreach (var (old, next) in PythonPathMigrations)
+        {
+            if (string.Equals(PythonPath, old, System.StringComparison.OrdinalIgnoreCase))
+            {
+                PythonPath = next;
+                changed = true;
+                break;
+            }
+        }
+
+        if (changed)
+        {
+            TrySave(out _);
         }
     }
 
