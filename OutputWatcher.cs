@@ -42,7 +42,15 @@ internal sealed class OutputWatcher : IDisposable
             EnableRaisingEvents = true,
         };
         _watcher.Created += OnCreated;
+        _watcher.Renamed += OnRenamed;
         _watcher.Error += OnError;
+
+        // Delete files that accumulated before this session.
+        var token = _cts.Token;
+        foreach (var file in Directory.EnumerateFiles(_directory))
+        {
+            _ = DeleteAfterDelayAsync(file, token);
+        }
 
         _log($"[comfy-tray] output watcher started: {_directory}");
     }
@@ -58,13 +66,39 @@ internal sealed class OutputWatcher : IDisposable
         {
             watcher.EnableRaisingEvents = false;
             watcher.Dispose();
+            SweepDirectory();
             _log("[comfy-tray] output watcher stopped.");
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "Shutdown sweep is best-effort.")]
+    private void SweepDirectory()
+    {
+        if (!Directory.Exists(_directory)) return;
+        foreach (var file in Directory.EnumerateFiles(_directory))
+        {
+            try
+            {
+                File.Delete(file);
+                _log($"[comfy-tray] deleted output file: {Path.GetFileName(file)}");
+            }
+            catch (Exception ex)
+            {
+                _log($"[comfy-tray] could not delete {Path.GetFileName(file)}: {ex.Message}");
+            }
         }
     }
 
     public void Dispose() => Stop();
 
     private void OnCreated(object sender, FileSystemEventArgs e)
+    {
+        var cts = _cts;
+        if (cts == null) return;
+        _ = DeleteAfterDelayAsync(e.FullPath, cts.Token);
+    }
+
+    private void OnRenamed(object sender, RenamedEventArgs e)
     {
         var cts = _cts;
         if (cts == null) return;
