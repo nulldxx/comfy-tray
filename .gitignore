@@ -427,3 +427,6 @@ MSBuild_Logs/
 
 # Publish output
 publish/
+
+# ctags
+tags

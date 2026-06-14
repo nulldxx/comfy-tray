@@ -18,7 +18,8 @@
              Description="$(var.ProductName) Installer"
              Comments="Runs the ComfyUI server in the system tray" />
 
-    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed."
+                  AllowSameVersionUpgrades="yes" />
     <MediaTemplate EmbedCab="yes" />
 
     <!-- Installation directory structure -->
@@ -76,7 +77,7 @@
 
     <!-- Start Menu Shortcut -->
     <DirectoryRef Id="ApplicationProgramsFolder">
-      <Component Id="ApplicationShortcut" Guid="{BE1F2A3B-4C5D-6E7F-8A9B-0C1D2E3F4A5B}">
+      <Component Id="ApplicationShortcut" Guid="{7DD0237D-E7C1-496A-9C6B-F446A111C808}">
         <Shortcut Id="ApplicationStartMenuShortcut"
                   Name="ComfyUI Tray"
                   Description="Runs the ComfyUI server in the system tray"
@@ -94,7 +95,7 @@
 
     <!-- Desktop Shortcut (Optional) -->
     <DirectoryRef Id="DesktopFolder">
-      <Component Id="DesktopShortcut" Guid="{CF2A3B4C-5D6E-7F8A-9B0C-1D2E3F4A5B6C}">
+      <Component Id="DesktopShortcut" Guid="{122EC7FD-1500-4593-AE68-E15D9AB7ABEB}">
         <Shortcut Id="DesktopShortcut"
                   Name="ComfyUI Tray"
                   Description="Runs the ComfyUI server in the system tray"
@@ -112,7 +113,7 @@
 
     <!-- Registry entry for Run at startup -->
     <DirectoryRef Id="TARGETDIR">
-      <Component Id="RegistryEntries" Guid="{D03B4C5D-6E7F-8A9B-0C1D-2E3F4A5B6C7D}">
+      <Component Id="RegistryEntries" Guid="{703A1316-27CF-4E72-AD01-BC7FCC9E532F}">
         <RegistryKey Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run">
           <RegistryValue Name="ComfyTray" Value="[INSTALLFOLDER]ComfyTray.exe" Type="string" KeyPath="yes" />
         </RegistryKey>
