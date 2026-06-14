@@ -1,0 +1,164 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            echo "VERSION=${{ github.event.inputs.version }}" >> $env:GITHUB_OUTPUT
+          } else {
+            $version = "${{ github.ref_name }}"
+            echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          }
+          $numericVersion = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ github.event.inputs.version }}" } else { "${{ github.ref_name }}" }
+          $numericVersion = $numericVersion -replace '^v', ''
+          echo "NUMERIC_VERSION=$numericVersion" >> $env:GITHUB_OUTPUT
+          echo "Version: $numericVersion"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup WiX Toolset
+        run: |
+          Write-Host "Installing WiX Toolset..."
+          choco install wixtoolset -y --no-progress
+          Write-Host "Refreshing environment..."
+          refreshenv
+          # Add WiX to PATH for this session
+          $env:PATH += ";C:\Program Files (x86)\WiX Toolset v3.11\bin"
+          echo "PATH=$env:PATH" >> $env:GITHUB_ENV
+
+      - name: Update WiX Product Version
+        run: |
+          $version = "${{ steps.version.outputs.NUMERIC_VERSION }}"
+          $wxsPath = "SampleTrayApp.Installer/Product.wxs"
+
+          Write-Host "Updating Product.wxs with version: $version"
+
+          $content = Get-Content $wxsPath -Raw
+          $content = $content -replace '(?<=<\?define ProductVersion=")[\d\.]*(?=" \?>)', $version
+
+          Set-Content $wxsPath -Value $content -NoNewline
+
+          Write-Host "Product.wxs updated"
+          Get-Content $wxsPath | Select-String "define ProductVersion"
+
+      - name: Restore dependencies
+        run: dotnet restore SampleTrayApp.csproj
+
+      - name: Build application
+        run: dotnet build SampleTrayApp.csproj -c Release --no-restore -p:Version=${{ steps.version.outputs.NUMERIC_VERSION }}
+
+      - name: Run tests
+        run: dotnet test SampleTrayApp.Tests/SampleTrayApp.Tests.csproj -c Release --logger "console;verbosity=normal"
+
+      - name: Publish application
+        run: dotnet publish SampleTrayApp.csproj -c Release -o bin/Release/net10.0-windows/publish --no-build -p:Version=${{ steps.version.outputs.NUMERIC_VERSION }}
+
+      - name: Build WiX Installer
+        run: |
+          $env:PATH += ";C:\Program Files (x86)\WiX Toolset v3.11\bin"
+          Write-Host "Building WiX installer..."
+          msbuild SampleTrayApp.Installer/SampleTrayApp.Installer.wixproj /p:Configuration=Release /p:Platform=x64 /v:normal
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "WiX build failed with exit code: $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
+          Write-Host "WiX build completed"
+
+      - name: Verify and rename MSI file
+        run: |
+          $version = "${{ steps.version.outputs.NUMERIC_VERSION }}"
+
+          Write-Host "Looking for MSI files..."
+          Get-ChildItem SampleTrayApp.Installer -Recurse -ErrorAction SilentlyContinue | Where-Object {$_.Extension -eq ".msi"} | Format-Table FullName, Length
+
+          $originalPath = "SampleTrayApp.Installer/bin/x64/Release/SampleTrayAppSetup.msi"
+          $newFileName = "SampleTrayAppSetup-v$version-x64.msi"
+
+          if (Test-Path $originalPath) {
+            Write-Host "MSI file found: $originalPath"
+            $size = (Get-Item $originalPath).Length
+            Write-Host "MSI size: $([math]::Round($size / 1MB, 2)) MB"
+
+            Copy-Item -Path $originalPath -Destination $newFileName
+            Write-Host "MSI copied as: $newFileName"
+          } else {
+            Write-Host "MSI file not found: $originalPath"
+            exit 1
+          }
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $numericVersion = "${{ steps.version.outputs.NUMERIC_VERSION }}"
+
+          $releaseNotes = @"
+          ## Downloads
+
+          ### Windows Installer
+          - **SampleTrayAppSetup-v$numericVersion-x64.msi** - Windows MSI installer (64-bit)
+
+          ## Installation
+          1. Download the MSI installer
+          2. Run the installer
+          3. The application will be installed to Program Files
+          4. Desktop and Start Menu shortcuts will be created
+
+          ## System Requirements
+          - **OS**: Windows 10 or later (64-bit)
+          - **.NET Runtime**: .NET 10.0 Runtime (Desktop) - [Download here](https://dotnet.microsoft.com/download/dotnet/10.0)
+          "@
+
+          Set-Content -Path "release_notes.md" -Value $releaseNotes
+
+          if (gh release view "$version" 2>$null) {
+            Write-Host "Release $version already exists"
+          } else {
+            gh release create "$version" --title "Sample Tray App $version" --notes-file "release_notes.md" --latest
+          }
+
+      - name: Upload MSI Installer
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $numericVersion = "${{ steps.version.outputs.NUMERIC_VERSION }}"
+
+          $msiFile = "SampleTrayAppSetup-v$numericVersion-x64.msi"
+          Write-Host "Uploading MSI installer to release..."
+          gh release upload $version $msiFile --clobber
+          Write-Host "MSI installer uploaded successfully"

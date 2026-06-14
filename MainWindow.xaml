@@ -1,0 +1,27 @@
+<Window x:Class="SampleTrayApp.MainWindow"
+        x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:tb="clr-namespace:H.NotifyIcon;assembly=H.NotifyIcon.Wpf"
+        Title="Sample Tray App" Height="0" Width="0"
+        ShowInTaskbar="False"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        Opacity="0">
+    <Grid>
+        <tb:TaskbarIcon
+            x:Name="TrayIcon"
+            IconSource="/icons/app.ico"
+            ToolTipText="Sample Tray App"
+            Visibility="Visible"
+            TrayLeftMouseUp="TrayIcon_LeftClick">
+            <tb:TaskbarIcon.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="About" Click="About_Click"/>
+                    <Separator/>
+                    <MenuItem Header="Exit" Click="Exit_Click"/>
+                </ContextMenu>
+            </tb:TaskbarIcon.ContextMenu>
+        </tb:TaskbarIcon>
+    </Grid>
+</Window>
