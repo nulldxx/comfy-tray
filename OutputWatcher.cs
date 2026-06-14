@@ -15,7 +15,9 @@ internal sealed class OutputWatcher : IDisposable
 
     private readonly string _directory;
     private readonly Action<string> _log;
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:DisposableFieldsShouldBeDisposed", Justification = "Disposed via Stop(), which Dispose() calls.")]
     private FileSystemWatcher? _watcher;
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:DisposableFieldsShouldBeDisposed", Justification = "Disposed via Stop(), which Dispose() calls.")]
     private CancellationTokenSource? _cts;
 
     internal OutputWatcher(string directory, Action<string> log)
@@ -62,24 +64,23 @@ internal sealed class OutputWatcher : IDisposable
 
     public void Dispose() => Stop();
 
-    private void OnCreated(object sender, FileSystemEventArgs e)
+    private void OnCreated(object sender, FileSystemEventArgs e) =>
+        _ = DeleteAfterDelayAsync(e.FullPath, _cts?.Token ?? CancellationToken.None);
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "File deletion is best-effort; any failure (locked, already gone, permissions) is logged, not thrown.")]
+    private async Task DeleteAfterDelayAsync(string path, CancellationToken token)
     {
-        var token = _cts?.Token ?? CancellationToken.None;
-        var path = e.FullPath;
-        _ = Task.Run(async () =>
+        try
         {
-            try
-            {
-                await Task.Delay(DeleteDelay, token).ConfigureAwait(false);
-                File.Delete(path);
-                _log($"[comfy-tray] deleted output file: {Path.GetFileName(path)}");
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                _log($"[comfy-tray] could not delete {Path.GetFileName(path)}: {ex.Message}");
-            }
-        }, CancellationToken.None);
+            await Task.Delay(DeleteDelay, token).ConfigureAwait(false);
+            File.Delete(path);
+            _log($"[comfy-tray] deleted output file: {Path.GetFileName(path)}");
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            _log($"[comfy-tray] could not delete {Path.GetFileName(path)}: {ex.Message}");
+        }
     }
 
     private void OnError(object sender, ErrorEventArgs e) =>
