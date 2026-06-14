@@ -16,6 +16,8 @@
 
   <ItemGroup>
     <Resource Include="icons\app.ico" />
+    <Resource Include="icons\red.ico" />
+    <Resource Include="icons\green.ico" />
     <None Include="icons\app.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

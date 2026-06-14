@@ -3,7 +3,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:tb="clr-namespace:H.NotifyIcon;assembly=H.NotifyIcon.Wpf"
-        Title="Sample Tray App" Height="0" Width="0"
+        Title="ComfyUI Tray" Height="0" Width="0"
         ShowInTaskbar="False"
         WindowStyle="None"
         ResizeMode="NoResize"
@@ -11,12 +11,17 @@
     <Grid>
         <tb:TaskbarIcon
             x:Name="TrayIcon"
-            IconSource="/icons/app.ico"
-            ToolTipText="Sample Tray App"
+            IconSource="/icons/red.ico"
+            ToolTipText="ComfyUI: Stopped"
             Visibility="Visible"
             TrayLeftMouseUp="TrayIcon_LeftClick">
             <tb:TaskbarIcon.ContextMenu>
                 <ContextMenu>
+                    <MenuItem x:Name="StartItem" Header="Start ComfyUI" Click="Start_Click"/>
+                    <MenuItem x:Name="StopItem" Header="Stop ComfyUI" Click="Stop_Click" IsEnabled="False"/>
+                    <Separator/>
+                    <MenuItem Header="Logs" Click="Logs_Click"/>
+                    <Separator/>
                     <MenuItem Header="About" Click="About_Click"/>
                     <Separator/>
                     <MenuItem Header="Exit" Click="Exit_Click"/>

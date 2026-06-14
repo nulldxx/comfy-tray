@@ -4,7 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Windows system tray application built with .NET 10 / WPF using the [H.NotifyIcon.Wpf](https://github.com/HardcodetNet/H.NotifyIcon) library. The app runs as a tray icon with a context menu (About / Exit) and no visible main window. It includes a WiX v3 MSI installer and a GitHub Actions release pipeline.
+A Windows system tray application built with .NET 10 / WPF using the [H.NotifyIcon.Wpf](https://github.com/HardcodetNet/H.NotifyIcon) library. It runs a **ComfyUI server** headless in the background. The tray icon is **red when stopped (the default) and green when running**. The context menu can Start/Stop ComfyUI, open a live **Logs** window, show About, and Exit. There is no visible main window, and the ComfyUI server is launched with no console window. It includes a WiX v3 MSI installer and a GitHub Actions release pipeline.
+
+The internal project/assembly is still named `SampleTrayApp` (kept to preserve the installer GUIDs and release pipeline); only behaviour and display names changed.
+
+### ComfyUI launch
+
+The server is started as `python main.py ... --listen 0.0.0.0 ...` with `CreateNoWindow=true` and stdout/stderr redirected into a ring buffer for the Logs window. The full command (interpreter path, directories, host/port, flags) is defined by `ComfyConfig`, whose defaults mirror the ComfyUI Desktop install. On first run defaults are written to `%APPDATA%\ComfyTray\config.json`, which the user can edit (paths support `%VAR%` environment tokens).
+
+Key source files:
+- `ComfyConfig.cs` — typed launch config + JSON load/save + argument building.
+- `ComfyServerManager.cs` — process lifecycle (start/stop entire tree), state, log ring buffer.
+- `MainWindow.xaml(.cs)` — tray icon, context menu, red/green state.
+- `LogWindow.xaml(.cs)` — live log viewer.
+- `icons/red.ico`, `icons/green.ico` — embedded as WPF resources (not shipped as separate files).
 
 ## Build & Test Commands
 
