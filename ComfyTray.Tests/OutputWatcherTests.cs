@@ -20,6 +20,7 @@ public sealed class OutputWatcherTests : IDisposable
         _dir = Path.Combine(Path.GetTempPath(), "comfytray-tests-" + Guid.NewGuid().ToString("N"));
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "Best-effort temp cleanup; a leaked temp dir must not fail the suite.")]
     public void Dispose()
     {
         try
