@@ -11,26 +11,36 @@ namespace ComfyTray;
 /// </summary>
 internal sealed class OutputWatcher : IDisposable
 {
-    private static readonly TimeSpan DeleteDelay = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan DefaultDeleteDelay = TimeSpan.FromSeconds(10);
 
     private readonly string _directory;
     private readonly Action<string> _log;
+    private readonly TimeSpan _deleteDelay;
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:DisposableFieldsShouldBeDisposed", Justification = "Disposed via Stop(), which Dispose() calls.")]
     private FileSystemWatcher? _watcher;
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:DisposableFieldsShouldBeDisposed", Justification = "Disposed via Stop(), which Dispose() calls.")]
     private CancellationTokenSource? _cts;
 
-    internal OutputWatcher(string directory, Action<string> log)
+    internal OutputWatcher(string directory, Action<string> log, TimeSpan? deleteDelay = null)
     {
         _directory = directory;
         _log = log;
+        _deleteDelay = deleteDelay ?? DefaultDeleteDelay;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "A failure to create the watch directory must never crash the tray; it is logged and the watcher is skipped.")]
     internal void Start()
     {
-        if (!Directory.Exists(_directory))
+        // ComfyUI creates its output directory lazily on the first image save, so it
+        // often does not exist at the instant we launch the server. Create it up front
+        // rather than skipping — otherwise the watcher would no-op for the whole session.
+        try
         {
-            _log($"[comfy-tray] output watcher: directory not found, skipping: {_directory}");
+            Directory.CreateDirectory(_directory);
+        }
+        catch (Exception ex)
+        {
+            _log($"[comfy-tray] output watcher: could not create directory, skipping: {_directory} ({ex.Message})");
             return;
         }
 
@@ -38,7 +48,7 @@ internal sealed class OutputWatcher : IDisposable
         _watcher = new FileSystemWatcher(_directory)
         {
             NotifyFilter = NotifyFilters.FileName,
-            IncludeSubdirectories = false,
+            IncludeSubdirectories = true,
             EnableRaisingEvents = true,
         };
         _watcher.Created += OnCreated;
@@ -47,7 +57,7 @@ internal sealed class OutputWatcher : IDisposable
 
         // Delete files that accumulated before this session.
         var token = _cts.Token;
-        foreach (var file in Directory.EnumerateFiles(_directory))
+        foreach (var file in Directory.EnumerateFiles(_directory, "*", SearchOption.AllDirectories))
         {
             _ = DeleteAfterDelayAsync(file, token);
         }
@@ -75,7 +85,7 @@ internal sealed class OutputWatcher : IDisposable
     private void SweepDirectory()
     {
         if (!Directory.Exists(_directory)) return;
-        foreach (var file in Directory.EnumerateFiles(_directory))
+        foreach (var file in Directory.EnumerateFiles(_directory, "*", SearchOption.AllDirectories))
         {
             try
             {
@@ -110,7 +120,7 @@ internal sealed class OutputWatcher : IDisposable
     {
         try
         {
-            await Task.Delay(DeleteDelay, token).ConfigureAwait(false);
+            await Task.Delay(_deleteDelay, token).ConfigureAwait(false);
             File.Delete(path);
             _log($"[comfy-tray] deleted output file: {Path.GetFileName(path)}");
         }
