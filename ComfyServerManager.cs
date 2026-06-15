@@ -30,6 +30,8 @@ internal sealed class ComfyServerManager : IDisposable
     private Process? _process;
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:DisposableFieldsShouldBeDisposed", Justification = "Disposed via Stop(), which Dispose() calls.")]
     private OutputWatcher? _outputWatcher;
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:DisposableFieldsShouldBeDisposed", Justification = "Disposed via Stop(), which Dispose() calls.")]
+    private OutputWatcher? _inputWatcher;
     private bool _stopping;
 
     public ComfyState State { get; private set; } = ComfyState.Stopped;
@@ -125,6 +127,12 @@ internal sealed class ComfyServerManager : IDisposable
 
             _outputWatcher = new OutputWatcher(config.ResolvedOutputDirectory, AppendLog);
             _outputWatcher.Start();
+
+            // The input folder is cleaned the same way as the output folder, but files
+            // linger for 30 seconds (e.g. long enough for a workflow to consume them).
+            _inputWatcher = new OutputWatcher(
+                config.ResolvedInputDirectory, AppendLog, TimeSpan.FromSeconds(30), name: "input");
+            _inputWatcher.Start();
         }
     }
 
@@ -133,7 +141,8 @@ internal sealed class ComfyServerManager : IDisposable
     public void Stop()
     {
         Process? process;
-        OutputWatcher? watcher;
+        OutputWatcher? outputWatcher;
+        OutputWatcher? inputWatcher;
         lock (_gate)
         {
             process = _process;
@@ -144,11 +153,14 @@ internal sealed class ComfyServerManager : IDisposable
 
             _stopping = true;
             _process = null;
-            watcher = _outputWatcher;
+            outputWatcher = _outputWatcher;
             _outputWatcher = null;
+            inputWatcher = _inputWatcher;
+            _inputWatcher = null;
         }
 
-        watcher?.Stop();
+        outputWatcher?.Stop();
+        inputWatcher?.Stop();
         AppendLog("[comfy-tray] stopping server...");
         try
         {
@@ -183,7 +195,8 @@ internal sealed class ComfyServerManager : IDisposable
 
     private void OnProcessExited(object? sender, EventArgs e)
     {
-        OutputWatcher? watcher;
+        OutputWatcher? outputWatcher;
+        OutputWatcher? inputWatcher;
         lock (_gate)
         {
             // Stop() handles its own state transition; ignore the resulting Exited.
@@ -198,12 +211,15 @@ internal sealed class ComfyServerManager : IDisposable
             _process.Dispose();
             _process = null;
             AppendLog($"[comfy-tray] server exited unexpectedly (exit code {code}).");
-            watcher = _outputWatcher;
+            outputWatcher = _outputWatcher;
             _outputWatcher = null;
+            inputWatcher = _inputWatcher;
+            _inputWatcher = null;
             SetStateLocked(ComfyState.Stopped);
         }
 
-        watcher?.Stop();
+        outputWatcher?.Stop();
+        inputWatcher?.Stop();
     }
 
     private static int SafeExitCode(Process p)
