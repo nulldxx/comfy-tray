@@ -7,7 +7,9 @@ namespace ComfyTray;
 
 /// <summary>
 /// Watches a directory for new files and deletes each one after a fixed delay.
-/// Thread-safe; safe to Start/Stop from any thread.
+/// Used for both the ComfyUI output and input folders, which differ only in their
+/// delete delay and the label that appears in the log. Thread-safe; safe to
+/// Start/Stop from any thread.
 /// </summary>
 internal sealed class OutputWatcher : IDisposable
 {
@@ -16,31 +18,33 @@ internal sealed class OutputWatcher : IDisposable
     private readonly string _directory;
     private readonly Action<string> _log;
     private readonly TimeSpan _deleteDelay;
+    private readonly string _name;
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:DisposableFieldsShouldBeDisposed", Justification = "Disposed via Stop(), which Dispose() calls.")]
     private FileSystemWatcher? _watcher;
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:DisposableFieldsShouldBeDisposed", Justification = "Disposed via Stop(), which Dispose() calls.")]
     private CancellationTokenSource? _cts;
 
-    internal OutputWatcher(string directory, Action<string> log, TimeSpan? deleteDelay = null)
+    internal OutputWatcher(string directory, Action<string> log, TimeSpan? deleteDelay = null, string name = "output")
     {
         _directory = directory;
         _log = log;
         _deleteDelay = deleteDelay ?? DefaultDeleteDelay;
+        _name = name;
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "A failure to create the watch directory must never crash the tray; it is logged and the watcher is skipped.")]
     internal void Start()
     {
-        // ComfyUI creates its output directory lazily on the first image save, so it
-        // often does not exist at the instant we launch the server. Create it up front
-        // rather than skipping — otherwise the watcher would no-op for the whole session.
+        // ComfyUI creates these directories lazily, so one may not exist at the instant
+        // we launch the server. Create it up front rather than skipping — otherwise the
+        // watcher would no-op for the whole session.
         try
         {
             Directory.CreateDirectory(_directory);
         }
         catch (Exception ex)
         {
-            _log($"[comfy-tray] output watcher: could not create directory, skipping: {_directory} ({ex.Message})");
+            _log($"[comfy-tray] {_name} watcher: could not create directory, skipping: {_directory} ({ex.Message})");
             return;
         }
 
@@ -62,7 +66,7 @@ internal sealed class OutputWatcher : IDisposable
             _ = DeleteAfterDelayAsync(file, token);
         }
 
-        _log($"[comfy-tray] output watcher started: {_directory}");
+        _log($"[comfy-tray] {_name} watcher started: {_directory}");
     }
 
     internal void Stop()
@@ -77,7 +81,7 @@ internal sealed class OutputWatcher : IDisposable
             watcher.EnableRaisingEvents = false;
             watcher.Dispose();
             SweepDirectory();
-            _log("[comfy-tray] output watcher stopped.");
+            _log($"[comfy-tray] {_name} watcher stopped.");
         }
     }
 
@@ -90,7 +94,7 @@ internal sealed class OutputWatcher : IDisposable
             try
             {
                 File.Delete(file);
-                _log($"[comfy-tray] deleted output file: {Path.GetFileName(file)}");
+                _log($"[comfy-tray] deleted {_name} file: {Path.GetFileName(file)}");
             }
             catch (Exception ex)
             {
@@ -122,7 +126,7 @@ internal sealed class OutputWatcher : IDisposable
         {
             await Task.Delay(_deleteDelay, token).ConfigureAwait(false);
             File.Delete(path);
-            _log($"[comfy-tray] deleted output file: {Path.GetFileName(path)}");
+            _log($"[comfy-tray] deleted {_name} file: {Path.GetFileName(path)}");
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -132,5 +136,5 @@ internal sealed class OutputWatcher : IDisposable
     }
 
     private void OnError(object sender, ErrorEventArgs e) =>
-        _log($"[comfy-tray] output watcher error: {e.GetException()?.Message}");
+        _log($"[comfy-tray] {_name} watcher error: {e.GetException()?.Message}");
 }
