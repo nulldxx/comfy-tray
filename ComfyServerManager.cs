@@ -41,6 +41,8 @@ internal sealed class ComfyServerManager : IDisposable
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:DisposableFieldsShouldBeDisposed", Justification = "Disposed via Stop(), which Dispose() calls.")]
     private OutputWatcher? _inputWatcher;
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:DisposableFieldsShouldBeDisposed", Justification = "Disposed via Stop(), which Dispose() calls.")]
+    private OutputWatcher? _tempWatcher;
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:DisposableFieldsShouldBeDisposed", Justification = "Disposed via Stop(), which Dispose() calls.")]
     private Timer? _historyClearTimer;
     private ComfyConfig? _config;
     private int _port;
@@ -169,6 +171,13 @@ internal sealed class ComfyServerManager : IDisposable
             config.ResolvedInputDirectory, AppendLog, TimeSpan.FromSeconds(30), name: "input");
         _inputWatcher.Start();
 
+        // The temp folder holds preview/intermediate renders. Give it the same 30s
+        // grace as the input folder so files still in use mid-generation aren't fought
+        // over; anything left behind is cleared on the periodic sweep and on stop.
+        _tempWatcher = new OutputWatcher(
+            config.ResolvedTempDirectory, AppendLog, TimeSpan.FromSeconds(30), name: "temp");
+        _tempWatcher.Start();
+
         // On the same cadence as the folder sweeps, wipe the server's prompt history
         // so old runs don't accumulate. Host is the bind address (often 0.0.0.0), so
         // we always connect back over the loopback interface.
@@ -185,6 +194,7 @@ internal sealed class ComfyServerManager : IDisposable
     {
         OutputWatcher? outputWatcher = null;
         OutputWatcher? inputWatcher = null;
+        OutputWatcher? tempWatcher = null;
         Timer? historyClearTimer = null;
         lock (_gate)
         {
@@ -196,7 +206,7 @@ internal sealed class ComfyServerManager : IDisposable
 
             if (enabled)
             {
-                if (_outputWatcher == null && _inputWatcher == null && _historyClearTimer == null)
+                if (_outputWatcher == null && _inputWatcher == null && _tempWatcher == null && _historyClearTimer == null)
                 {
                     StartPurgingLocked();
                 }
@@ -207,6 +217,8 @@ internal sealed class ComfyServerManager : IDisposable
                 _outputWatcher = null;
                 inputWatcher = _inputWatcher;
                 _inputWatcher = null;
+                tempWatcher = _tempWatcher;
+                _tempWatcher = null;
                 historyClearTimer = _historyClearTimer;
                 _historyClearTimer = null;
             }
@@ -216,6 +228,7 @@ internal sealed class ComfyServerManager : IDisposable
         // Disabling must not delete what the user is choosing to keep.
         outputWatcher?.Stop(sweep: false);
         inputWatcher?.Stop(sweep: false);
+        tempWatcher?.Stop(sweep: false);
         AppendLog($"[comfy-tray] purging {(enabled ? "enabled" : "disabled")}.");
     }
 
@@ -226,6 +239,7 @@ internal sealed class ComfyServerManager : IDisposable
         Process? process;
         OutputWatcher? outputWatcher;
         OutputWatcher? inputWatcher;
+        OutputWatcher? tempWatcher;
         Timer? historyClearTimer;
         lock (_gate)
         {
@@ -241,6 +255,8 @@ internal sealed class ComfyServerManager : IDisposable
             _outputWatcher = null;
             inputWatcher = _inputWatcher;
             _inputWatcher = null;
+            tempWatcher = _tempWatcher;
+            _tempWatcher = null;
             historyClearTimer = _historyClearTimer;
             _historyClearTimer = null;
         }
@@ -248,6 +264,7 @@ internal sealed class ComfyServerManager : IDisposable
         historyClearTimer?.Dispose();
         outputWatcher?.Stop();
         inputWatcher?.Stop();
+        tempWatcher?.Stop();
         AppendLog("[comfy-tray] stopping server...");
         try
         {
@@ -284,6 +301,7 @@ internal sealed class ComfyServerManager : IDisposable
     {
         OutputWatcher? outputWatcher;
         OutputWatcher? inputWatcher;
+        OutputWatcher? tempWatcher;
         Timer? historyClearTimer;
         lock (_gate)
         {
@@ -303,6 +321,8 @@ internal sealed class ComfyServerManager : IDisposable
             _outputWatcher = null;
             inputWatcher = _inputWatcher;
             _inputWatcher = null;
+            tempWatcher = _tempWatcher;
+            _tempWatcher = null;
             historyClearTimer = _historyClearTimer;
             _historyClearTimer = null;
             SetStateLocked(ComfyState.Stopped);
@@ -311,6 +331,7 @@ internal sealed class ComfyServerManager : IDisposable
         historyClearTimer?.Dispose();
         outputWatcher?.Stop();
         inputWatcher?.Stop();
+        tempWatcher?.Stop();
     }
 
     /// <summary>

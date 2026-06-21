@@ -30,6 +30,12 @@ internal sealed class ComfyConfig
 
     public string OutputDirectory { get; set; } = @"%USERPROFILE%\Documents\ComfyUI\output";
 
+    /// <summary>
+    /// Scratch directory for preview images and intermediate files written during
+    /// generation. Swept like the input/output folders so partial renders don't linger.
+    /// </summary>
+    public string TempDirectory { get; set; } = @"%USERPROFILE%\Documents\ComfyUI\temp";
+
     public string FrontEndRoot { get; set; } =
         @"%LOCALAPPDATA%\Programs\ComfyUI\resources\ComfyUI\web_custom_versions\desktop_app";
 
@@ -77,6 +83,8 @@ internal sealed class ComfyConfig
 
     public string ResolvedOutputDirectory => Expand(OutputDirectory);
 
+    public string ResolvedTempDirectory => Expand(TempDirectory);
+
     public string ResolvedWorkingDirectory =>
         string.IsNullOrWhiteSpace(WorkingDirectory)
             ? (Path.GetDirectoryName(ResolvedMainScript) ?? ".")
@@ -100,6 +108,7 @@ internal sealed class ComfyConfig
             "--user-directory", Expand(UserDirectory),
             "--input-directory", Expand(InputDirectory),
             "--output-directory", Expand(OutputDirectory),
+            "--temp-directory", Expand(TempDirectory),
             "--front-end-root", Expand(FrontEndRoot),
             "--base-directory", Expand(BaseDirectory),
             "--database-url", ResolvedDatabaseUrl,
