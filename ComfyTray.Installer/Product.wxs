@@ -114,7 +114,7 @@
     <!-- Registry entry for Run at startup -->
     <DirectoryRef Id="TARGETDIR">
       <Component Id="RegistryEntries" Guid="{703A1316-27CF-4E72-AD01-BC7FCC9E532F}">
-        <RegistryKey Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run">
+        <RegistryKey Root="HKCU" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run">
           <RegistryValue Name="ComfyTray" Value="[INSTALLFOLDER]ComfyTray.exe" Type="string" KeyPath="yes" />
         </RegistryKey>
       </Component>
