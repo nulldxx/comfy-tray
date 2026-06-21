@@ -20,6 +20,8 @@
                     <MenuItem x:Name="StartItem" Header="Start ComfyUI" Click="Start_Click"/>
                     <MenuItem x:Name="StopItem" Header="Stop ComfyUI" Click="Stop_Click" IsEnabled="False"/>
                     <Separator/>
+                    <MenuItem x:Name="PurgeItem" Header="Purge outputs &amp; history" IsCheckable="True" IsChecked="True" Click="Purge_Click"/>
+                    <Separator/>
                     <MenuItem Header="Logs" Click="Logs_Click"/>
                     <Separator/>
                     <MenuItem Header="About" Click="About_Click"/>

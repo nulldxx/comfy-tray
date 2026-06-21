@@ -51,6 +51,13 @@ internal sealed class ComfyConfig
     public bool LogStdout { get; set; } = true;
 
     /// <summary>
+    /// When true (the default), the output and input folders are swept and the
+    /// ComfyUI prompt history is cleared periodically while the server runs.
+    /// Toggled from the tray menu.
+    /// </summary>
+    public bool PurgeOutputsAndHistory { get; set; } = true;
+
+    /// <summary>
     /// Working directory for the server process. When null/empty it defaults to the
     /// directory containing <see cref="MainScript"/>.
     /// </summary>

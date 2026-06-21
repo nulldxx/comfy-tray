@@ -42,7 +42,9 @@ internal sealed class ComfyServerManager : IDisposable
     private OutputWatcher? _inputWatcher;
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:DisposableFieldsShouldBeDisposed", Justification = "Disposed via Stop(), which Dispose() calls.")]
     private Timer? _historyClearTimer;
+    private ComfyConfig? _config;
     private int _port;
+    private bool _purgeEnabled = true;
     private bool _stopping;
 
     public ComfyState State { get; private set; } = ComfyState.Stopped;
@@ -136,22 +138,85 @@ internal sealed class ComfyServerManager : IDisposable
             _process = process;
             SetStateLocked(ComfyState.Running);
 
-            _outputWatcher = new OutputWatcher(config.ResolvedOutputDirectory, AppendLog);
-            _outputWatcher.Start();
-
-            // The input folder is cleaned the same way as the output folder, but files
-            // linger for 30 seconds (e.g. long enough for a workflow to consume them).
-            _inputWatcher = new OutputWatcher(
-                config.ResolvedInputDirectory, AppendLog, TimeSpan.FromSeconds(30), name: "input");
-            _inputWatcher.Start();
-
-            // On the same cadence as the folder sweeps, wipe the server's prompt history
-            // so old runs don't accumulate. Host is the bind address (often 0.0.0.0), so
-            // we always connect back over the loopback interface.
+            _config = config;
             _port = config.Port;
-            _historyClearTimer = new Timer(
-                _ => _ = ClearHistoryAsync(), null, HistoryClearInterval, HistoryClearInterval);
+            _purgeEnabled = config.PurgeOutputsAndHistory;
+            if (_purgeEnabled)
+            {
+                StartPurgingLocked();
+            }
         }
+    }
+
+    /// <summary>
+    /// Starts the folder watchers and the prompt-history clear timer. Caller must
+    /// hold <see cref="_gate"/> and have set <see cref="_config"/>.
+    /// </summary>
+    private void StartPurgingLocked()
+    {
+        var config = _config;
+        if (config == null)
+        {
+            return;
+        }
+
+        _outputWatcher = new OutputWatcher(config.ResolvedOutputDirectory, AppendLog);
+        _outputWatcher.Start();
+
+        // The input folder is cleaned the same way as the output folder, but files
+        // linger for 30 seconds (e.g. long enough for a workflow to consume them).
+        _inputWatcher = new OutputWatcher(
+            config.ResolvedInputDirectory, AppendLog, TimeSpan.FromSeconds(30), name: "input");
+        _inputWatcher.Start();
+
+        // On the same cadence as the folder sweeps, wipe the server's prompt history
+        // so old runs don't accumulate. Host is the bind address (often 0.0.0.0), so
+        // we always connect back over the loopback interface.
+        _historyClearTimer = new Timer(
+            _ => _ = ClearHistoryAsync(), null, HistoryClearInterval, HistoryClearInterval);
+    }
+
+    /// <summary>
+    /// Enables or disables purging — the output/input folder sweeps and prompt-history
+    /// clearing. Takes effect immediately while the server is running and is honoured on
+    /// the next start. Disabling stops watching without sweeping the current contents.
+    /// </summary>
+    public void SetPurgeEnabled(bool enabled)
+    {
+        OutputWatcher? outputWatcher = null;
+        OutputWatcher? inputWatcher = null;
+        Timer? historyClearTimer = null;
+        lock (_gate)
+        {
+            _purgeEnabled = enabled;
+            if (_process == null)
+            {
+                return; // not running; honoured on the next Start
+            }
+
+            if (enabled)
+            {
+                if (_outputWatcher == null && _inputWatcher == null && _historyClearTimer == null)
+                {
+                    StartPurgingLocked();
+                }
+            }
+            else
+            {
+                outputWatcher = _outputWatcher;
+                _outputWatcher = null;
+                inputWatcher = _inputWatcher;
+                _inputWatcher = null;
+                historyClearTimer = _historyClearTimer;
+                _historyClearTimer = null;
+            }
+        }
+
+        historyClearTimer?.Dispose();
+        // Disabling must not delete what the user is choosing to keep.
+        outputWatcher?.Stop(sweep: false);
+        inputWatcher?.Stop(sweep: false);
+        AppendLog($"[comfy-tray] purging {(enabled ? "enabled" : "disabled")}.");
     }
 
     /// <summary>Stops the server and its child processes. Safe to call when stopped.</summary>

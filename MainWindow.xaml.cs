@@ -24,6 +24,7 @@ internal sealed partial class MainWindow : Window
         InitializeComponent();
 
         _config = ComfyConfig.Load(out var loadError);
+        PurgeItem.IsChecked = _config.PurgeOutputsAndHistory;
         _server.StateChanged += OnServerStateChanged;
         UpdateForState(_server.State);
 
@@ -48,6 +49,14 @@ internal sealed partial class MainWindow : Window
     }
 
     private void Stop_Click(object sender, RoutedEventArgs e) => _server.Stop();
+
+    private void Purge_Click(object sender, RoutedEventArgs e)
+    {
+        var enabled = PurgeItem.IsChecked;
+        _config.PurgeOutputsAndHistory = enabled;
+        _config.TrySave(out _);
+        _server.SetPurgeEnabled(enabled);
+    }
 
     private void Logs_Click(object sender, RoutedEventArgs e)
     {

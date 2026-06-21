@@ -142,7 +142,12 @@ internal sealed class OutputWatcher : IDisposable
         }
     }
 
-    internal void Stop()
+    /// <param name="sweep">
+    /// When true (the default), any files still present are deleted as the watcher
+    /// stops. Pass false to stop watching without touching the current contents —
+    /// e.g. when the user disables purging and wants to keep what is there.
+    /// </param>
+    internal void Stop(bool sweep = true)
     {
         var periodicRestartTimer = Interlocked.Exchange(ref _periodicRestartTimer, null);
         periodicRestartTimer?.Dispose();
@@ -160,7 +165,11 @@ internal sealed class OutputWatcher : IDisposable
         StopInnerWatcher();
         if (hadWatcher)
         {
-            SweepDirectory();
+            if (sweep)
+            {
+                SweepDirectory();
+            }
+
             _log($"[comfy-tray] {_name} watcher stopped.");
         }
     }
