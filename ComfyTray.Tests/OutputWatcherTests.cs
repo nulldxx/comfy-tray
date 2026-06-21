@@ -133,6 +133,23 @@ public sealed class OutputWatcherTests : IDisposable
     }
 
     [Fact]
+    public void PeriodicRestart_SweepsFiles_MissedByADeadWatcher()
+    {
+        Directory.CreateDirectory(_dir);
+        // Restart frequently and delete promptly so the periodic sweep is observable quickly.
+        using var watcher = new OutputWatcher(
+            _dir, _ => { }, deleteDelay: ShortDelay, periodicRestartInterval: TimeSpan.FromMilliseconds(200));
+        watcher.Start();
+
+        // Drop a file in without relying on the live FileSystemWatcher event; the periodic
+        // restart re-enumerates the directory and should schedule it for deletion.
+        var file = Path.Combine(_dir, "missed.png");
+        File.WriteAllText(file, "data");
+
+        Assert.True(WaitFor(() => !File.Exists(file)), "Periodic restart should sweep files present in the directory.");
+    }
+
+    [Fact]
     public void Start_IsIdempotentWithStop_AndDoesNotThrow()
     {
         using var watcher = NewWatcher();

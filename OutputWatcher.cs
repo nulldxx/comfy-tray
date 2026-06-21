@@ -14,17 +14,24 @@ namespace ComfyTray;
 /// Also watches the parent directory so that if the target folder is deleted and
 /// re-created (e.g. by ComfyUI resetting its workspace), the inner watcher is
 /// automatically restarted and the folder is swept again after a short delay.
+///
+/// As a safety net against a FileSystemWatcher that has silently stopped raising
+/// events, the inner watcher is also torn down and restarted on a fixed interval.
+/// Each restart re-enumerates the directory and schedules every file present for
+/// deletion, so a missed event is recovered on the next sweep.
 /// </summary>
 internal sealed class OutputWatcher : IDisposable
 {
     private static readonly TimeSpan DefaultDeleteDelay = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan RestartDelay = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan DefaultPeriodicRestartInterval = TimeSpan.FromMinutes(10);
 
     private readonly string _directory;
     private readonly string? _parentDirectory;
     private readonly string _directoryName;
     private readonly Action<string> _log;
     private readonly TimeSpan _deleteDelay;
+    private readonly TimeSpan _periodicRestartInterval;
     private readonly string _name;
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:DisposableFieldsShouldBeDisposed", Justification = "Disposed via Stop(), which Dispose() calls.")]
@@ -37,13 +44,17 @@ internal sealed class OutputWatcher : IDisposable
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:DisposableFieldsShouldBeDisposed", Justification = "Disposed via Stop(), which Dispose() calls.")]
     private CancellationTokenSource? _restartCts;
 
-    internal OutputWatcher(string directory, Action<string> log, TimeSpan? deleteDelay = null, string name = "output")
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:DisposableFieldsShouldBeDisposed", Justification = "Disposed via Stop(), which Dispose() calls.")]
+    private Timer? _periodicRestartTimer;
+
+    internal OutputWatcher(string directory, Action<string> log, TimeSpan? deleteDelay = null, string name = "output", TimeSpan? periodicRestartInterval = null)
     {
         _directory = directory;
         _parentDirectory = Path.GetDirectoryName(directory);
         _directoryName = Path.GetFileName(directory);
         _log = log;
         _deleteDelay = deleteDelay ?? DefaultDeleteDelay;
+        _periodicRestartInterval = periodicRestartInterval ?? DefaultPeriodicRestartInterval;
         _name = name;
     }
 
@@ -51,6 +62,7 @@ internal sealed class OutputWatcher : IDisposable
     {
         StartInnerWatcher();
         StartParentWatcher();
+        _periodicRestartTimer = new Timer(_ => PeriodicRestart(), null, _periodicRestartInterval, _periodicRestartInterval);
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "A failure to create the watch directory must never crash the tray; it is logged and the watcher is skipped.")]
@@ -132,6 +144,9 @@ internal sealed class OutputWatcher : IDisposable
 
     internal void Stop()
     {
+        var periodicRestartTimer = Interlocked.Exchange(ref _periodicRestartTimer, null);
+        periodicRestartTimer?.Dispose();
+
         CancelRestart();
 
         var parentWatcher = Interlocked.Exchange(ref _parentWatcher, null);
@@ -147,6 +162,28 @@ internal sealed class OutputWatcher : IDisposable
         {
             SweepDirectory();
             _log($"[comfy-tray] {_name} watcher stopped.");
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "The periodic restart runs on a timer thread; any failure must be logged, never crash the tray.")]
+    private void PeriodicRestart()
+    {
+        // The FileSystemWatcher occasionally stops delivering events without raising
+        // an error. Tear it down and start a fresh one; StartInnerWatcher re-enumerates
+        // the directory and schedules every file present for deletion, so anything the
+        // dead watcher missed is swept up here.
+        try
+        {
+            // Skip if Stop() (or a parent-directory delete) has paused us; the timer
+            // is disposed by Stop(), but a callback may already be in flight.
+            if (_periodicRestartTimer == null) return;
+            _log($"[comfy-tray] {_name} watcher: periodic restart + sweep.");
+            StopInnerWatcher();
+            StartInnerWatcher();
+        }
+        catch (Exception ex)
+        {
+            _log($"[comfy-tray] {_name} watcher periodic restart failed: {ex.Message}");
         }
     }
 
