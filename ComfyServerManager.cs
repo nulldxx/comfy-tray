@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace ComfyTray;
 
@@ -23,6 +26,11 @@ internal sealed class ComfyServerManager : IDisposable
 {
     private const int MaxLogLines = 5000;
 
+    /// <summary>How often the ComfyUI prompt history is wiped while the server runs.</summary>
+    private static readonly TimeSpan HistoryClearInterval = TimeSpan.FromMinutes(10);
+
+    private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(10) };
+
     private readonly object _gate = new();
     private readonly LinkedList<string> _log = new();
 
@@ -32,6 +40,9 @@ internal sealed class ComfyServerManager : IDisposable
     private OutputWatcher? _outputWatcher;
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:DisposableFieldsShouldBeDisposed", Justification = "Disposed via Stop(), which Dispose() calls.")]
     private OutputWatcher? _inputWatcher;
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:DisposableFieldsShouldBeDisposed", Justification = "Disposed via Stop(), which Dispose() calls.")]
+    private Timer? _historyClearTimer;
+    private int _port;
     private bool _stopping;
 
     public ComfyState State { get; private set; } = ComfyState.Stopped;
@@ -133,6 +144,13 @@ internal sealed class ComfyServerManager : IDisposable
             _inputWatcher = new OutputWatcher(
                 config.ResolvedInputDirectory, AppendLog, TimeSpan.FromSeconds(30), name: "input");
             _inputWatcher.Start();
+
+            // On the same cadence as the folder sweeps, wipe the server's prompt history
+            // so old runs don't accumulate. Host is the bind address (often 0.0.0.0), so
+            // we always connect back over the loopback interface.
+            _port = config.Port;
+            _historyClearTimer = new Timer(
+                _ => _ = ClearHistoryAsync(), null, HistoryClearInterval, HistoryClearInterval);
         }
     }
 
@@ -143,6 +161,7 @@ internal sealed class ComfyServerManager : IDisposable
         Process? process;
         OutputWatcher? outputWatcher;
         OutputWatcher? inputWatcher;
+        Timer? historyClearTimer;
         lock (_gate)
         {
             process = _process;
@@ -157,8 +176,11 @@ internal sealed class ComfyServerManager : IDisposable
             _outputWatcher = null;
             inputWatcher = _inputWatcher;
             _inputWatcher = null;
+            historyClearTimer = _historyClearTimer;
+            _historyClearTimer = null;
         }
 
+        historyClearTimer?.Dispose();
         outputWatcher?.Stop();
         inputWatcher?.Stop();
         AppendLog("[comfy-tray] stopping server...");
@@ -197,6 +219,7 @@ internal sealed class ComfyServerManager : IDisposable
     {
         OutputWatcher? outputWatcher;
         OutputWatcher? inputWatcher;
+        Timer? historyClearTimer;
         lock (_gate)
         {
             // Stop() handles its own state transition; ignore the resulting Exited.
@@ -215,11 +238,41 @@ internal sealed class ComfyServerManager : IDisposable
             _outputWatcher = null;
             inputWatcher = _inputWatcher;
             _inputWatcher = null;
+            historyClearTimer = _historyClearTimer;
+            _historyClearTimer = null;
             SetStateLocked(ComfyState.Stopped);
         }
 
+        historyClearTimer?.Dispose();
         outputWatcher?.Stop();
         inputWatcher?.Stop();
+    }
+
+    /// <summary>
+    /// Wipes the ComfyUI server's prompt history via its HTTP API. Best-effort: a
+    /// server that is still starting, already gone, or unreachable is logged, not thrown.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "History clear runs on a timer thread; any failure must be logged, never crash the tray.")]
+    private async Task ClearHistoryAsync()
+    {
+        try
+        {
+            var uri = new Uri($"http://127.0.0.1:{_port}/history");
+            using var content = new StringContent("{\"clear\":true}", Encoding.UTF8, "application/json");
+            using var response = await HttpClient.PostAsync(uri, content).ConfigureAwait(false);
+            if (response.IsSuccessStatusCode)
+            {
+                AppendLog("[comfy-tray] cleared ComfyUI history.");
+            }
+            else
+            {
+                AppendLog($"[comfy-tray] history clear returned HTTP {(int)response.StatusCode}.");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"[comfy-tray] could not clear ComfyUI history: {ex.Message}");
+        }
     }
 
     private static int SafeExitCode(Process p)
