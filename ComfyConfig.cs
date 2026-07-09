@@ -253,14 +253,23 @@ internal sealed class ComfyConfig
             MainScript = inst.MainScript,
             BaseDirectory = baseDir,
             UserDirectory = Path.Combine(baseDir, "user"),
-            InputDirectory = Path.Combine(baseDir, "input"),
-            OutputDirectory = Path.Combine(baseDir, "output"),
+            // Desktop-managed instances share input/output across instances; use those when discovery
+            // found them, otherwise fall back to the checkout-relative defaults.
+            InputDirectory = inst.InputDirectory ?? Path.Combine(baseDir, "input"),
+            OutputDirectory = inst.OutputDirectory ?? Path.Combine(baseDir, "output"),
             TempDirectory = Path.Combine(baseDir, "temp"),
             FrontEndRoot = inst.FrontEndRoot ?? string.Empty,
             ExtraModelPathsConfig = inst.ExtraModelPathsConfig ?? string.Empty,
             EnableManager = inst.HasManager,
         };
     }
+
+    /// <summary>
+    /// True when <paramref name="value"/> is still the auto-derived <c>BaseDirectory\name</c> default,
+    /// i.e. the user hasn't pointed it somewhere of their own.
+    /// </summary>
+    private bool IsDefaultSubdir(string value, string name) =>
+        string.Equals(value, Path.Combine(BaseDirectory, name), System.StringComparison.OrdinalIgnoreCase);
 
     private void Migrate()
     {
@@ -272,6 +281,37 @@ internal sealed class ComfyConfig
                 PythonPath = next;
                 changed = true;
                 break;
+            }
+        }
+
+        // Older builds (before shared-folder discovery) seeded Desktop-managed instances with an empty
+        // ExtraModelPathsConfig and checkout-relative input/output dirs. That empty ExtraModelPathsConfig
+        // is the tell: re-run discovery once and adopt the Desktop shared model-paths YAML plus the shared
+        // input/output folders, so an existing config self-heals without hand-editing. Input/output are
+        // only rewritten while they're still the untouched checkout-relative defaults, so a user who has
+        // deliberately pointed them elsewhere is left alone.
+        if (string.IsNullOrWhiteSpace(ExtraModelPathsConfig))
+        {
+            var discovered = ComfyDiscovery.DiscoverBest();
+            if (discovered != null)
+            {
+                if (!string.IsNullOrWhiteSpace(discovered.ExtraModelPathsConfig))
+                {
+                    ExtraModelPathsConfig = discovered.ExtraModelPathsConfig;
+                    changed = true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(discovered.InputDirectory) && IsDefaultSubdir(InputDirectory, "input"))
+                {
+                    InputDirectory = discovered.InputDirectory;
+                    changed = true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(discovered.OutputDirectory) && IsDefaultSubdir(OutputDirectory, "output"))
+                {
+                    OutputDirectory = discovered.OutputDirectory;
+                    changed = true;
+                }
             }
         }
 

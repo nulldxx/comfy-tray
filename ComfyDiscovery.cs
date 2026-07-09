@@ -45,6 +45,8 @@ internal sealed record ComfyInstallation(
     string BaseDirectory,
     string? ExtraModelPathsConfig,
     string? FrontEndRoot,
+    string? InputDirectory,
+    string? OutputDirectory,
     bool HasManager,
     string Source);
 
@@ -142,7 +144,7 @@ internal static class ComfyDiscovery
         {
             var source = $"Managed instance: {root}";
             Add(found,
-                TryInstanceCheckout(root, source, trace)
+                TryInstanceCheckout(root, desktopExtraModelPaths, source, trace)
                 ?? TryDesktopBase(
                     root, ComfyInstallKind.DesktopStandalone, bundledMainScript: null, bundledFrontEndRoot: null,
                     desktopExtraModelPaths, source, trace));
@@ -216,6 +218,8 @@ internal static class ComfyDiscovery
                 checkoutKind, python, checkoutMain, basePath,
                 ExtraModelPathsIfPresent(basePath, desktopExtraModelPaths),
                 FrontEndRoot: null,
+                InputDirectory: null,
+                OutputDirectory: null,
                 HasManager: HasManager(basePath),
                 Source: source);
         }
@@ -227,6 +231,8 @@ internal static class ComfyDiscovery
                 ComfyInstallKind.DesktopBundled, python, bundledMainScript, basePath,
                 ExtraModelPathsIfPresent(basePath, desktopExtraModelPaths),
                 FrontEndRoot: bundledFrontEndRoot != null && DirExists(bundledFrontEndRoot) ? bundledFrontEndRoot : null,
+                InputDirectory: null,
+                OutputDirectory: null,
                 HasManager: HasManager(basePath),
                 Source: source);
         }
@@ -258,6 +264,8 @@ internal static class ComfyDiscovery
             ComfyInstallKind.Portable, python, main, baseDir,
             ExtraModelPathsConfig: Exists(extra) ? extra : null,
             FrontEndRoot: null,
+            InputDirectory: null,
+            OutputDirectory: null,
             HasManager: HasManager(baseDir),
             Source: $"Portable install: {root}");
     }
@@ -269,7 +277,8 @@ internal static class ComfyDiscovery
     /// (<c>models</c>/<c>output</c>/<c>user</c>/<c>input</c>/<c>temp</c>/<c>custom_nodes</c>) all sit
     /// together in that one directory — so the checkout itself is the base directory.
     /// </summary>
-    private static ComfyInstallation? TryInstanceCheckout(string instanceRoot, string source, List<string>? trace)
+    private static ComfyInstallation? TryInstanceCheckout(
+        string instanceRoot, string? desktopExtraModelPaths, string source, List<string>? trace)
     {
         if (string.IsNullOrWhiteSpace(instanceRoot))
         {
@@ -285,19 +294,53 @@ internal static class ComfyDiscovery
             return null;
         }
 
-        var extra = Path.Combine(checkout, "extra_model_paths.yaml");
+        var (sharedInput, sharedOutput) = SharedIoDirectories(instanceRoot, trace);
         trace?.Add($"  [ok]   {source}: in-tree checkout .venv python + main.py");
         return new ComfyInstallation(
             ComfyInstallKind.DesktopStandalone, python, main, checkout,
-            ExtraModelPathsConfig: Exists(extra) ? extra : null,
+            // Managed instances keep their models in the Desktop-managed shared folders, mapped in by
+            // the Desktop shared_model_paths.yaml — so prefer that over any in-tree extra_model_paths.yaml.
+            ExtraModelPathsIfPresent(checkout, desktopExtraModelPaths),
             FrontEndRoot: null,
+            InputDirectory: sharedInput,
+            OutputDirectory: sharedOutput,
             HasManager: HasManager(checkout),
             Source: source);
     }
 
+    /// <summary>
+    /// For a Desktop-managed instance, the input/output folders are shared across instances in a
+    /// sibling <c>ComfyUI-Shared</c> directory:
+    /// <c>…\Comfy-Desktop\ComfyUI-Installs\&lt;name&gt;</c> → <c>…\Comfy-Desktop\ComfyUI-Shared\{input,output}</c>,
+    /// exactly as the Desktop app passes via <c>--input-directory</c>/<c>--output-directory</c>. Each is
+    /// returned only when it exists on disk; a missing folder falls back to the checkout-relative default.
+    /// </summary>
+    private static (string? Input, string? Output) SharedIoDirectories(string instanceRoot, List<string>? trace)
+    {
+        // instanceRoot = …\ComfyUI-Installs\<name>; its grandparent is the Desktop root that also holds
+        // ComfyUI-Shared. GetParent does pure path arithmetic (no IO), so this stays unit-testable.
+        var desktopRoot = Directory.GetParent(instanceRoot)?.Parent;
+        if (desktopRoot == null)
+        {
+            return (null, null);
+        }
+
+        var shared = Path.Combine(desktopRoot.FullName, "ComfyUI-Shared");
+        var input = Path.Combine(shared, "input");
+        var output = Path.Combine(shared, "output");
+        var hasInput = DirExists(input);
+        var hasOutput = DirExists(output);
+        if (hasInput || hasOutput)
+        {
+            trace?.Add($"  [ok]   Shared I/O: {shared} (input={hasInput}, output={hasOutput})");
+        }
+
+        return (hasInput ? input : null, hasOutput ? output : null);
+    }
+
     private static string? ExtraModelPathsIfPresent(string basePath, string? desktopExtraModelPaths)
     {
-        // Prefer the Desktop-managed extra_models_config.yaml; fall back to one beside the base path.
+        // Prefer the Desktop-managed shared model-paths YAML; fall back to one beside the base path.
         if (desktopExtraModelPaths != null && Exists(desktopExtraModelPaths))
         {
             return desktopExtraModelPaths;
@@ -463,10 +506,34 @@ internal static class ComfyDiscovery
             : Path.Combine(localAppData, "Programs", "ComfyUI", "resources", "ComfyUI", "web_custom_versions", "desktop_app");
     }
 
+    /// <summary>
+    /// Locates the Desktop-managed "extra model paths" YAML that maps in the shared model directories.
+    /// The current "Comfy Desktop 2" app writes <c>%APPDATA%\Comfy Desktop\shared_model_paths.yaml</c>;
+    /// v1 wrote <c>%APPDATA%\ComfyUI\extra_models_config.yaml</c>. Both file names are probed under each
+    /// known Desktop product directory; the first that exists wins.
+    /// </summary>
     private static string? DesktopExtraModelPaths()
     {
         var appData = SafeFolder(Environment.SpecialFolder.ApplicationData);
-        return appData == null ? null : Path.Combine(appData, "ComfyUI", "extra_models_config.yaml");
+        if (appData == null)
+        {
+            return null;
+        }
+
+        string[] fileNames = ["shared_model_paths.yaml", "extra_models_config.yaml"];
+        foreach (var product in DesktopProductNames)
+        {
+            foreach (var fileName in fileNames)
+            {
+                var candidate = Path.Combine(appData, product, fileName);
+                if (Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+        }
+
+        return null;
     }
 
     private static bool Exists(string path)

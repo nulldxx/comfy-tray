@@ -145,6 +145,64 @@ public sealed class ComfyDiscoveryTests : IDisposable
     }
 
     [Fact]
+    public void ManagedInstance_UsesDesktopSharedModelPaths_WhenPresent()
+    {
+        // The models for a Desktop-managed instance live in the shared folders, mapped in by the
+        // Desktop-managed shared_model_paths.yaml — discovery must surface it as the extra-model-paths
+        // config even though the checkout itself has no in-tree extra_model_paths.yaml.
+        var instanceRoot = Dir("installs", "ComfyUI");
+        Touch("installs", "ComfyUI", "ComfyUI", "main.py");
+        Touch("installs", "ComfyUI", "ComfyUI", ".venv", "Scripts", "python.exe");
+        var sharedYaml = Touch("appdata", "Comfy Desktop", "shared_model_paths.yaml");
+
+        var install = Assert.Single(
+            Discover(standalone: new[] { instanceRoot }, extraModels: sharedYaml));
+
+        Assert.Equal(ComfyInstallKind.DesktopStandalone, install.Kind);
+        Assert.Equal(sharedYaml, install.ExtraModelPathsConfig);
+    }
+
+    [Fact]
+    public void ManagedInstance_UsesSharedInputOutput_WhenSiblingSharedFolderExists()
+    {
+        // Desktop keeps input/output in a ComfyUI-Shared folder that is a sibling of ComfyUI-Installs,
+        // i.e. the grandparent of the instance root. Discovery must surface those (and FromInstallation
+        // must carry them through), rather than the checkout-relative defaults.
+        var instanceRoot = Dir("ComfyUI-Installs", "ComfyUI");
+        Touch("ComfyUI-Installs", "ComfyUI", "ComfyUI", "main.py");
+        Touch("ComfyUI-Installs", "ComfyUI", "ComfyUI", ".venv", "Scripts", "python.exe");
+        var sharedInput = Dir("ComfyUI-Shared", "input");
+        var sharedOutput = Dir("ComfyUI-Shared", "output");
+
+        var install = Assert.Single(Discover(standalone: new[] { instanceRoot }));
+
+        Assert.Equal(sharedInput, install.InputDirectory);
+        Assert.Equal(sharedOutput, install.OutputDirectory);
+
+        var cfg = ComfyConfig.FromInstallation(install);
+        Assert.Equal(sharedInput, cfg.InputDirectory);
+        Assert.Equal(sharedOutput, cfg.OutputDirectory);
+    }
+
+    [Fact]
+    public void ManagedInstance_FallsBackToCheckoutIo_WhenNoSharedFolder()
+    {
+        var instanceRoot = Dir("ComfyUI-Installs", "ComfyUI");
+        Touch("ComfyUI-Installs", "ComfyUI", "ComfyUI", "main.py");
+        Touch("ComfyUI-Installs", "ComfyUI", "ComfyUI", ".venv", "Scripts", "python.exe");
+
+        var install = Assert.Single(Discover(standalone: new[] { instanceRoot }));
+
+        Assert.Null(install.InputDirectory);
+        Assert.Null(install.OutputDirectory);
+
+        var cfg = ComfyConfig.FromInstallation(install);
+        var checkout = Path.Combine(instanceRoot, "ComfyUI");
+        Assert.Equal(Path.Combine(checkout, "input"), cfg.InputDirectory);
+        Assert.Equal(Path.Combine(checkout, "output"), cfg.OutputDirectory);
+    }
+
+    [Fact]
     public void SkipsBase_WhenVenvPythonMissing()
     {
         var basePath = Dir("base");
