@@ -13,8 +13,10 @@ internal enum ComfyInstallKind
     Portable,
 
     /// <summary>
-    /// A 2026 "Standalone" managed instance under <c>%USERPROFILE%\ComfyUI-Installs\&lt;name&gt;</c>:
-    /// a <c>.venv</c> and a <c>ComfyUI</c> git checkout side by side.
+    /// A managed "Standalone" instance. The current app keeps these under
+    /// <c>%LOCALAPPDATA%\Comfy-Desktop\ComfyUI-Installs\&lt;name&gt;</c> as a self-contained
+    /// <c>ComfyUI</c> checkout with an in-tree <c>.venv</c>; older instances lived under
+    /// <c>%USERPROFILE%\ComfyUI-Installs</c> with the <c>.venv</c> beside the checkout.
     /// </summary>
     DesktopStandalone,
 
@@ -52,8 +54,9 @@ internal sealed record ComfyInstallation(
 /// <para>
 /// Comfy Desktop is a moving target: v1 recorded a single <c>basePath</c> in
 /// <c>%APPDATA%\ComfyUI\config.json</c> and ran <c>ComfyUI/main.py</c> via a uv-managed
-/// <c>.venv\Scripts\python.exe</c>; the 2026 app manages multiple "Standalone" instances under
-/// <c>%USERPROFILE%\ComfyUI-Installs</c> and shares models via <c>%USERPROFILE%\ComfyUI-Shared</c>.
+/// <c>.venv\Scripts\python.exe</c>; the current "Comfy Desktop 2" app manages multiple instances
+/// under <c>%LOCALAPPDATA%\Comfy-Desktop\ComfyUI-Installs\&lt;name&gt;</c>, each a self-contained
+/// <c>ComfyUI</c> checkout whose <c>.venv</c> and data folders live inside the checkout itself.
 /// Portable installs keep the classic <c>python_embeded</c> + <c>ComfyUI\main.py</c> shape.
 /// Rather than track versions, discovery <em>detects capabilities</em>: a candidate is only
 /// accepted when both an interpreter and a <c>main.py</c> exist.
@@ -131,12 +134,18 @@ internal static class ComfyDiscovery
                 desktopExtraModelPaths, source: $"Desktop config basePath: {basePath}", trace));
         }
 
-        // 2. Well-known 2026 managed "Standalone" instances.
+        // 2. Well-known 2026 managed "Standalone" instances. The current app ships each instance as a
+        //    self-contained checkout with an in-tree .venv (TryInstanceCheckout); older managed
+        //    instances kept the .venv one level above the checkout (TryDesktopBase). Try the current
+        //    shape first, then fall back.
         foreach (var root in standaloneInstanceRoots)
         {
-            Add(found, TryDesktopBase(
-                root, ComfyInstallKind.DesktopStandalone, bundledMainScript: null, bundledFrontEndRoot: null,
-                desktopExtraModelPaths, source: $"Managed instance: {root}", trace));
+            var source = $"Managed instance: {root}";
+            Add(found,
+                TryInstanceCheckout(root, source, trace)
+                ?? TryDesktopBase(
+                    root, ComfyInstallKind.DesktopStandalone, bundledMainScript: null, bundledFrontEndRoot: null,
+                    desktopExtraModelPaths, source, trace));
         }
 
         // 3. Legacy well-known base paths (Documents\ComfyUI, %USERPROFILE%\ComfyUI).
@@ -253,6 +262,39 @@ internal static class ComfyDiscovery
             Source: $"Portable install: {root}");
     }
 
+    /// <summary>
+    /// Probes the current (2026 "Comfy Desktop 2") managed-instance layout, where an instance root
+    /// under <c>%LOCALAPPDATA%\Comfy-Desktop\ComfyUI-Installs\&lt;name&gt;</c> contains a self-contained
+    /// <c>ComfyUI</c> git checkout: <c>main.py</c>, an in-tree uv <c>.venv</c>, and the data folders
+    /// (<c>models</c>/<c>output</c>/<c>user</c>/<c>input</c>/<c>temp</c>/<c>custom_nodes</c>) all sit
+    /// together in that one directory — so the checkout itself is the base directory.
+    /// </summary>
+    private static ComfyInstallation? TryInstanceCheckout(string instanceRoot, string source, List<string>? trace)
+    {
+        if (string.IsNullOrWhiteSpace(instanceRoot))
+        {
+            return null;
+        }
+
+        var checkout = Path.Combine(instanceRoot, "ComfyUI");
+        var main = Path.Combine(checkout, "main.py");
+        var python = Path.Combine(checkout, VenvPython);
+        if (!Exists(main) || !Exists(python))
+        {
+            trace?.Add($"  [skip] {source}: no in-tree checkout ({checkout}) with .venv python + main.py");
+            return null;
+        }
+
+        var extra = Path.Combine(checkout, "extra_model_paths.yaml");
+        trace?.Add($"  [ok]   {source}: in-tree checkout .venv python + main.py");
+        return new ComfyInstallation(
+            ComfyInstallKind.DesktopStandalone, python, main, checkout,
+            ExtraModelPathsConfig: Exists(extra) ? extra : null,
+            FrontEndRoot: null,
+            HasManager: HasManager(checkout),
+            Source: source);
+    }
+
     private static string? ExtraModelPathsIfPresent(string basePath, string? desktopExtraModelPaths)
     {
         // Prefer the Desktop-managed extra_models_config.yaml; fall back to one beside the base path.
@@ -330,22 +372,51 @@ internal static class ComfyDiscovery
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "Enumerating the instances directory is best-effort; failures are logged and ignored.")]
     private static string[] EnumerateStandaloneInstanceRoots(List<string> trace)
     {
-        var userProfile = SafeEnv("USERPROFILE");
-        if (userProfile == null)
+        // Where the various Desktop generations keep their managed instances:
+        //  - current "Comfy Desktop 2": %LOCALAPPDATA%\Comfy-Desktop\ComfyUI-Installs
+        //  - product-named electron dirs (defensive): %LOCALAPPDATA%\<productName>\ComfyUI-Installs
+        //  - older/legacy: %USERPROFILE%\ComfyUI-Installs
+        var parents = new List<string>();
+
+        var localAppData = SafeFolder(Environment.SpecialFolder.LocalApplicationData);
+        if (localAppData != null)
         {
-            return [];
+            parents.Add(Path.Combine(localAppData, "Comfy-Desktop", "ComfyUI-Installs"));
+            foreach (var product in DesktopProductNames)
+            {
+                parents.Add(Path.Combine(localAppData, product, "ComfyUI-Installs"));
+            }
         }
 
-        var installs = Path.Combine(userProfile, "ComfyUI-Installs");
-        try
+        var userProfile = SafeEnv("USERPROFILE");
+        if (userProfile != null)
         {
-            return Directory.Exists(installs) ? Directory.GetDirectories(installs) : [];
+            parents.Add(Path.Combine(userProfile, "ComfyUI-Installs"));
         }
-        catch (Exception ex)
+
+        var roots = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var parent in parents)
         {
-            trace.Add($"  [warn] {installs}: {ex.Message}");
-            return [];
+            if (!seen.Add(parent))
+            {
+                continue;
+            }
+
+            try
+            {
+                if (Directory.Exists(parent))
+                {
+                    roots.AddRange(Directory.GetDirectories(parent));
+                }
+            }
+            catch (Exception ex)
+            {
+                trace.Add($"  [warn] {parent}: {ex.Message}");
+            }
         }
+
+        return [.. roots];
     }
 
     private static IEnumerable<string> LegacyBasePaths()

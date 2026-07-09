@@ -124,6 +124,27 @@ public sealed class ComfyDiscoveryTests : IDisposable
     }
 
     [Fact]
+    public void DetectsManagedInstance_WithInTreeVenvCheckout()
+    {
+        // Current "Comfy Desktop 2" shape: the instance root holds a self-contained ComfyUI checkout
+        // whose .venv sits inside the checkout (beside main.py), not one level above it.
+        var instanceRoot = Dir("installs", "ComfyUI");
+        Touch("installs", "ComfyUI", "ComfyUI", "main.py");
+        Touch("installs", "ComfyUI", "ComfyUI", ".venv", "Scripts", "python.exe");
+        Dir("installs", "ComfyUI", "ComfyUI", "custom_nodes", "ComfyUI-Manager");
+
+        var results = Discover(standalone: new[] { instanceRoot });
+
+        var install = Assert.Single(results);
+        Assert.Equal(ComfyInstallKind.DesktopStandalone, install.Kind);
+        var checkout = Path.Combine(instanceRoot, "ComfyUI");
+        Assert.Equal(checkout, install.BaseDirectory);
+        Assert.Equal(Path.Combine(checkout, "main.py"), install.MainScript);
+        Assert.Equal(Path.Combine(checkout, ".venv", "Scripts", "python.exe"), install.PythonPath);
+        Assert.True(install.HasManager);
+    }
+
+    [Fact]
     public void SkipsBase_WhenVenvPythonMissing()
     {
         var basePath = Dir("base");
