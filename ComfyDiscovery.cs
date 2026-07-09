@@ -78,7 +78,11 @@ internal static class ComfyDiscovery
     private static readonly string[] DesktopProductNames = ["ComfyUI", "Comfy Desktop"];
 
     /// <summary>The best (highest-priority) discovered installation, or null if none was found.</summary>
-    public static ComfyInstallation? DiscoverBest() => DiscoverAll(out _).FirstOrDefault();
+    public static ComfyInstallation? DiscoverBest()
+    {
+        var all = DiscoverAll(out _);
+        return all.Count > 0 ? all[0] : null;
+    }
 
     /// <summary>
     /// All valid installations in priority order, plus a human-readable <paramref name="report"/>
@@ -324,7 +328,7 @@ internal static class ComfyDiscovery
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "Enumerating the instances directory is best-effort; failures are logged and ignored.")]
-    private static IReadOnlyList<string> EnumerateStandaloneInstanceRoots(List<string> trace)
+    private static string[] EnumerateStandaloneInstanceRoots(List<string> trace)
     {
         var userProfile = SafeEnv("USERPROFILE");
         if (userProfile == null)

@@ -157,7 +157,7 @@ internal sealed class ComfyServerManager : IDisposable
 
         AppendLog("[comfy-tray] configured interpreter or main.py missing; running discovery...");
         var installs = ComfyDiscovery.DiscoverAll(out var report);
-        var best = installs.FirstOrDefault();
+        var best = installs.Count > 0 ? installs[0] : null;
         if (best == null)
         {
             throw new InvalidOperationException(
