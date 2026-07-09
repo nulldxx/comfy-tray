@@ -84,25 +84,16 @@ internal sealed class ComfyServerManager : IDisposable
                 return;
             }
 
-            var python = config.ResolvedPythonPath;
-            var script = config.ResolvedMainScript;
-
-            if (!File.Exists(python))
-            {
-                throw new InvalidOperationException(
-                    $"Python interpreter not found:\n{python}\n\nEdit {ComfyConfig.ConfigPath} to correct PythonPath.");
-            }
-
-            if (!File.Exists(script))
-            {
-                throw new InvalidOperationException(
-                    $"ComfyUI main.py not found:\n{script}\n\nEdit {ComfyConfig.ConfigPath} to correct MainScript.");
-            }
+            // Resolve the config we will actually launch. If the configured interpreter/script are
+            // missing (e.g. a Desktop update relocated things), fall back to live discovery rather
+            // than failing outright — and if that also finds nothing, surface exactly what was searched.
+            var effective = ResolveLaunchable(config);
+            var python = effective.ResolvedPythonPath;
 
             var psi = new ProcessStartInfo
             {
                 FileName = python,
-                WorkingDirectory = config.ResolvedWorkingDirectory,
+                WorkingDirectory = effective.ResolvedWorkingDirectory,
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
@@ -111,7 +102,7 @@ internal sealed class ComfyServerManager : IDisposable
                 StandardErrorEncoding = Encoding.UTF8,
             };
 
-            foreach (var arg in config.BuildArguments())
+            foreach (var arg in effective.BuildArguments())
             {
                 psi.ArgumentList.Add(arg);
             }
@@ -122,7 +113,7 @@ internal sealed class ComfyServerManager : IDisposable
             process.Exited += OnProcessExited;
 
             _stopping = false;
-            AppendLog($"[comfy-tray] starting: {config.DescribeCommandLine()}");
+            AppendLog($"[comfy-tray] starting: {effective.DescribeCommandLine()}");
 
             try
             {
@@ -140,14 +131,54 @@ internal sealed class ComfyServerManager : IDisposable
             _process = process;
             SetStateLocked(ComfyState.Running);
 
-            _config = config;
-            _port = config.Port;
-            _purgeEnabled = config.PurgeOutputsAndHistory;
+            _config = effective;
+            _port = effective.Port;
+            _purgeEnabled = effective.PurgeOutputsAndHistory;
             if (_purgeEnabled)
             {
                 StartPurgingLocked();
             }
         }
+    }
+
+    /// <summary>
+    /// Returns the configuration to launch. If the requested config already points at an existing
+    /// interpreter and <c>main.py</c> it is used unchanged. Otherwise discovery runs: the first valid
+    /// installation found is used (carrying over the user's runtime preferences — host, port, purge,
+    /// logging), and the switch is logged. If nothing is found, throws with the full search report.
+    /// Caller must hold <see cref="_gate"/>.
+    /// </summary>
+    private ComfyConfig ResolveLaunchable(ComfyConfig requested)
+    {
+        if (File.Exists(requested.ResolvedPythonPath) && File.Exists(requested.ResolvedMainScript))
+        {
+            return requested;
+        }
+
+        AppendLog("[comfy-tray] configured interpreter or main.py missing; running discovery...");
+        var installs = ComfyDiscovery.DiscoverAll(out var report);
+        var best = installs.FirstOrDefault();
+        if (best == null)
+        {
+            throw new InvalidOperationException(
+                "Could not find a runnable ComfyUI installation.\n\n" +
+                $"Configured interpreter:\n{requested.ResolvedPythonPath}\n\n" +
+                $"Configured main.py:\n{requested.ResolvedMainScript}\n\n" +
+                $"Locations searched:\n{report}\n\n" +
+                $"Edit {ComfyConfig.ConfigPath} to set PythonPath and MainScript manually.");
+        }
+
+        var effective = ComfyConfig.FromInstallation(best);
+        // Preserve the user's runtime preferences; only the install paths are taken from discovery.
+        effective.Host = requested.Host;
+        effective.Port = requested.Port;
+        effective.LogStdout = requested.LogStdout;
+        effective.PurgeOutputsAndHistory = requested.PurgeOutputsAndHistory;
+        effective.ExtraArguments = requested.ExtraArguments;
+        AppendLog(
+            $"[comfy-tray] discovered {best.Kind} installation ({best.Source}); " +
+            $"launching {effective.ResolvedPythonPath}");
+        return effective;
     }
 
     /// <summary>

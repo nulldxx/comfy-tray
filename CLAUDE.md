@@ -8,10 +8,11 @@ A Windows system tray application built with .NET 10 / WPF using the [H.NotifyIc
 
 ### ComfyUI launch
 
-The server is started as `python main.py ... --listen 0.0.0.0 ...` with `CreateNoWindow=true` and stdout/stderr redirected into a ring buffer for the Logs window. The full command (interpreter path, directories, host/port, flags) is defined by `ComfyConfig`, whose defaults mirror the ComfyUI Desktop install. On first run defaults are written to `%APPDATA%\ComfyTray\config.json`, which the user can edit (paths support `%VAR%` environment tokens).
+The server is started as `python main.py ... --listen 0.0.0.0 ...` with `CreateNoWindow=true` and stdout/stderr redirected into a ring buffer for the Logs window. The full command (interpreter path, directories, host/port, flags) is defined by `ComfyConfig`. On first run, `ComfyDiscovery` locates a real ComfyUI installation (portable, older/legacy Comfy Desktop, or a current-Desktop managed instance) and seeds `%APPDATA%\ComfyTray\config.json` from it; if nothing is found it falls back to the historical hard-coded defaults. The user can edit the config afterwards (paths support `%VAR%` environment tokens). Install-specific/newer flags (`--front-end-root`, `--extra-model-paths-config`, `--database-url`, `--enable-manager`) are emitted only when applicable, so portable/older ComfyUI still launches. If the configured interpreter/`main.py` are missing at launch (e.g. a Desktop update relocated them), `ComfyServerManager` re-runs discovery and reports the full search in the error.
 
 Key source files:
 - `ComfyConfig.cs` — typed launch config + JSON load/save + argument building.
+- `ComfyDiscovery.cs` — dynamic discovery of ComfyUI installations across portable/Desktop layouts (capability detection, not version detection).
 - `ComfyServerManager.cs` — process lifecycle (start/stop entire tree), state, log ring buffer.
 - `MainWindow.xaml(.cs)` — tray icon, context menu, red/green state.
 - `LogWindow.xaml(.cs)` — live log viewer.

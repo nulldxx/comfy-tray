@@ -43,7 +43,8 @@ internal sealed class ComfyConfig
         @"%APPDATA%\ComfyUI\extra_models_config.yaml";
 
     /// <summary>
-    /// SQLite database URL. When null/empty it is derived from <see cref="BaseDirectory"/>.
+    /// Explicit SQLite database URL. When null/empty, no <c>--database-url</c> flag is passed and
+    /// ComfyUI derives its own default under <see cref="UserDirectory"/>.
     /// </summary>
     public string? DatabaseUrl { get; set; }
 
@@ -90,11 +91,6 @@ internal sealed class ComfyConfig
             ? (Path.GetDirectoryName(ResolvedMainScript) ?? ".")
             : Expand(WorkingDirectory);
 
-    private string ResolvedDatabaseUrl =>
-        string.IsNullOrWhiteSpace(DatabaseUrl)
-            ? "sqlite:///" + Expand(BaseDirectory).Replace('\\', '/') + "/user/comfyui.db"
-            : Expand(DatabaseUrl);
-
     /// <summary>
     /// Builds the ordered argument list passed to Python. The first element is the
     /// main script; the rest are CLI flags. Paths are expanded; quoting is handled
@@ -109,11 +105,34 @@ internal sealed class ComfyConfig
             "--input-directory", Expand(InputDirectory),
             "--output-directory", Expand(OutputDirectory),
             "--temp-directory", Expand(TempDirectory),
-            "--front-end-root", Expand(FrontEndRoot),
             "--base-directory", Expand(BaseDirectory),
-            "--database-url", ResolvedDatabaseUrl,
-            "--extra-model-paths-config", Expand(ExtraModelPathsConfig),
         };
+
+        // The following flags are newer and/or install-specific. They are emitted only when set (and,
+        // where relevant, when the target exists) so a portable/older ComfyUI that doesn't recognise
+        // them — or lacks the bundled Desktop front-end — still launches cleanly.
+        var frontEnd = Expand(FrontEndRoot);
+        if (!string.IsNullOrWhiteSpace(FrontEndRoot) && Directory.Exists(frontEnd))
+        {
+            args.Add("--front-end-root");
+            args.Add(frontEnd);
+        }
+
+        var extraModels = Expand(ExtraModelPathsConfig);
+        if (!string.IsNullOrWhiteSpace(ExtraModelPathsConfig) && File.Exists(extraModels))
+        {
+            args.Add("--extra-model-paths-config");
+            args.Add(extraModels);
+        }
+
+        // Only pass an explicit --database-url when the user set one. Left unset, ComfyUI derives its
+        // own default under --user-directory (the same location we used to compute), which avoids
+        // handing the flag to a ComfyUI build too old to know it.
+        if (!string.IsNullOrWhiteSpace(DatabaseUrl))
+        {
+            args.Add("--database-url");
+            args.Add(Expand(DatabaseUrl));
+        }
 
         if (LogStdout)
         {
@@ -201,7 +220,7 @@ internal sealed class ComfyConfig
                 loadError = "Config file was empty; using defaults.";
             }
 
-            var defaults = new ComfyConfig();
+            var defaults = FromDiscovery();
             defaults.TrySave(out _);
             return defaults;
         }
@@ -210,6 +229,37 @@ internal sealed class ComfyConfig
             loadError = $"Failed to read config ({path}): {ex.Message}. Using defaults.";
             return new ComfyConfig();
         }
+    }
+
+    /// <summary>
+    /// Builds a starting config by <see cref="ComfyDiscovery">discovering</see> a real ComfyUI
+    /// installation (portable or Desktop). Falls back to the historical hard-coded defaults when
+    /// nothing is found, so behaviour never regresses on a machine where discovery can't help.
+    /// </summary>
+    public static ComfyConfig FromDiscovery()
+    {
+        var best = ComfyDiscovery.DiscoverBest();
+        return best == null ? new ComfyConfig() : FromInstallation(best);
+    }
+
+    /// <summary>Maps a discovered installation onto a fresh, launchable config.</summary>
+    internal static ComfyConfig FromInstallation(ComfyInstallation inst)
+    {
+        System.ArgumentNullException.ThrowIfNull(inst);
+        var baseDir = inst.BaseDirectory;
+        return new ComfyConfig
+        {
+            PythonPath = inst.PythonPath,
+            MainScript = inst.MainScript,
+            BaseDirectory = baseDir,
+            UserDirectory = Path.Combine(baseDir, "user"),
+            InputDirectory = Path.Combine(baseDir, "input"),
+            OutputDirectory = Path.Combine(baseDir, "output"),
+            TempDirectory = Path.Combine(baseDir, "temp"),
+            FrontEndRoot = inst.FrontEndRoot ?? string.Empty,
+            ExtraModelPathsConfig = inst.ExtraModelPathsConfig ?? string.Empty,
+            EnableManager = inst.HasManager,
+        };
     }
 
     private void Migrate()
