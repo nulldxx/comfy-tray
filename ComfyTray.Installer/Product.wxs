@@ -14,7 +14,7 @@
 
     <Package InstallerVersion="200"
              Compressed="yes"
-             InstallScope="perMachine"
+             InstallScope="perUser"
              Description="$(var.ProductName) Installer"
              Comments="Runs the ComfyUI server in the system tray" />
 
@@ -24,9 +24,11 @@
 
     <!-- Installation directory structure -->
     <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="ProgramFiles64Folder">
-        <Directory Id="INSTALLFOLDER" Name="ComfyTray">
-          <Directory Id="IconsFolder" Name="icons" />
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="ProgramsFolder" Name="Programs">
+          <Directory Id="INSTALLFOLDER" Name="ComfyTray">
+            <Directory Id="IconsFolder" Name="icons" />
+          </Directory>
         </Directory>
       </Directory>
 
@@ -42,7 +44,6 @@
       <Component Id="ComfyTrayExe" Guid="{06097700-8AE3-4AAE-90BB-03C28C7F9B9D}">
         <File Id="ComfyTrayEXE"
               Source="$(var.ComfyTray.TargetDir)ComfyTray.exe"
-              KeyPath="yes"
               Checksum="yes" />
         <File Id="ComfyTrayDLL"
               Source="$(var.ComfyTray.TargetDir)ComfyTray.dll" />
@@ -50,19 +51,41 @@
               Source="$(var.ComfyTray.TargetDir)ComfyTray.runtimeconfig.json" />
         <File Id="ComfyTrayDepsJsonFile"
               Source="$(var.ComfyTray.TargetDir)ComfyTray.deps.json" />
+        <RegistryValue Root="HKCU"
+                       Key="Software\ComfyTray\Components"
+                       Name="ComfyTrayExe"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+        <!-- Required because INSTALLFOLDER is under the user profile (ICE64) -->
+        <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall"/>
+        <!-- Also clean up the intermediate %LocalAppData%\Programs folder, but only
+             if it is empty (RemoveFolder never deletes a non-empty dir), so it is
+             left intact when other per-user apps share it. -->
+        <RemoveFolder Id="RemoveProgramsFolder" Directory="ProgramsFolder" On="uninstall"/>
       </Component>
 
       <!-- NuGet Dependencies - H.NotifyIcon -->
       <Component Id="HNotifyIcon" Guid="{7314F763-4B74-4191-BA5C-D6130DEBBEE6}">
         <File Id="HNotifyIconWpfDll"
-              Source="$(var.ComfyTray.TargetDir)H.NotifyIcon.Wpf.dll"
-              KeyPath="yes" />
+              Source="$(var.ComfyTray.TargetDir)H.NotifyIcon.Wpf.dll" />
+        <RegistryValue Root="HKCU"
+                       Key="Software\ComfyTray\Components"
+                       Name="HNotifyIcon"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
       </Component>
 
       <Component Id="HNotifyIconCore" Guid="{0984632A-088A-4F72-B0E9-486EF7989AE3}">
         <File Id="HNotifyIconDll"
-              Source="$(var.ComfyTray.TargetDir)H.NotifyIcon.dll"
-              KeyPath="yes" />
+              Source="$(var.ComfyTray.TargetDir)H.NotifyIcon.dll" />
+        <RegistryValue Root="HKCU"
+                       Key="Software\ComfyTray\Components"
+                       Name="HNotifyIconCore"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
       </Component>
     </DirectoryRef>
 
@@ -70,8 +93,15 @@
     <DirectoryRef Id="IconsFolder">
       <Component Id="IconsComponent" Guid="{EDAE4C34-8B83-4DD9-9170-0D9E451FF154}">
         <File Id="AppIco"
-              Source="$(var.ComfyTray.TargetDir)icons\app.ico"
-              KeyPath="yes" />
+              Source="$(var.ComfyTray.TargetDir)icons\app.ico" />
+        <RegistryValue Root="HKCU"
+                       Key="Software\ComfyTray\Components"
+                       Name="IconsComponent"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+        <!-- Required because IconsFolder is under the user profile (ICE64) -->
+        <RemoveFolder Id="RemoveIconsFolder" Directory="IconsFolder" On="uninstall"/>
       </Component>
     </DirectoryRef>
 

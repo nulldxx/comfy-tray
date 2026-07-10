@@ -135,7 +135,7 @@ jobs:
           ## Installation
           1. Download the MSI installer
           2. Run the installer
-          3. The application will be installed to Program Files
+          3. The application installs per-user (no admin required) to %LocalAppData%\Programs\ComfyTray
           4. Desktop and Start Menu shortcuts will be created
 
           ## System Requirements

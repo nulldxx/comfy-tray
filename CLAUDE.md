@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Windows system tray application built with .NET 10 / WPF using the [H.NotifyIcon.Wpf](https://github.com/HardcodetNet/H.NotifyIcon) library. It runs a **ComfyUI server** headless in the background. The tray icon is **red when stopped (the default) and green when running**. The context menu can Start/Stop ComfyUI, open a live **Logs** window, show About, and Exit. There is no visible main window, and the ComfyUI server is launched with no console window. It includes a WiX v3 MSI installer and a GitHub Actions release pipeline.
+A Windows system tray application built with .NET 10 / WPF using the [H.NotifyIcon.Wpf](https://github.com/HardcodetNet/H.NotifyIcon) library. It runs a **ComfyUI server** headless in the background. The tray icon is **red when stopped (the default) and green when running**. The context menu can Start/Stop ComfyUI, open a live **Logs** window, show About, and Exit. There is no visible main window, and the ComfyUI server is launched with no console window. It includes a WiX v3 MSI installer (per-user: installs to `%LocalAppData%\Programs\ComfyTray`, no elevation, registers auto-start via `HKCU\...\Run`) and a GitHub Actions release pipeline.
 
 ### ComfyUI launch
 
@@ -40,7 +40,7 @@ dotnet publish ComfyTray.csproj -c Release -o bin/Release/net10.0-windows/publis
 
 - **ComfyTray** (`ComfyTray.csproj`) - .NET 10 WPF WinExe. `App.xaml` sets `ShutdownMode="OnExplicitShutdown"` so the app stays alive in the tray. `MainWindow.xaml` is a zero-size invisible window that hosts a `TaskbarIcon` from H.NotifyIcon.
 - **ComfyTray.Tests** (`ComfyTray.Tests/`) - xUnit test project (currently placeholder).
-- **ComfyTray.Installer** (`ComfyTray.Installer/`) - WiX v3 MSI installer. Installs to Program Files, creates Start Menu/Desktop shortcuts, and registers auto-start via `HKLM\...\Run`.
+- **ComfyTray.Installer** (`ComfyTray.Installer/`) - WiX v3 MSI installer. Per-user (no elevation): installs to `%LocalAppData%\Programs\ComfyTray`, creates Start Menu/Desktop shortcuts, and registers auto-start via `HKCU\...\Run`.
 
 ## Release Process
 
