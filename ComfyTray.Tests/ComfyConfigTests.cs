@@ -101,4 +101,10 @@ public sealed class ComfyConfigTests : IDisposable
         Assert.True(HasFlag(new ComfyConfig { EnableManager = true }.BuildArguments(), "--enable-manager"));
         Assert.False(HasFlag(new ComfyConfig { EnableManager = false }.BuildArguments(), "--enable-manager"));
     }
+
+    [Fact]
+    public void WatchForUserLogon_DefaultsOff()
+    {
+        Assert.False(new ComfyConfig().WatchForUserLogon);
+    }
 }

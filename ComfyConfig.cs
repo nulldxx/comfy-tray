@@ -65,6 +65,13 @@ internal sealed class ComfyConfig
     public bool PurgeOutputsAndHistory { get; set; } = true;
 
     /// <summary>
+    /// When true, ComfyUI is stopped when another user takes over the physical console
+    /// (fast user switching / another logon), and restarted when this session returns —
+    /// only if it was running at the time. Default off. Toggled from the tray menu.
+    /// </summary>
+    public bool WatchForUserLogon { get; set; }
+
+    /// <summary>
     /// Working directory for the server process. When null/empty it defaults to the
     /// directory containing <see cref="MainScript"/>.
     /// </summary>

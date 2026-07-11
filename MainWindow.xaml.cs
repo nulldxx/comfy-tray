@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Media.Imaging;
+using Microsoft.Win32;
 
 namespace ComfyTray;
 
@@ -19,13 +20,21 @@ internal sealed partial class MainWindow : Window
     private readonly ComfyServerManager _server = new();
     private LogWindow? _logWindow;
 
+    /// <summary>
+    /// True when the watch stopped ComfyUI because another user took the console, so it
+    /// should be restarted when this session reconnects. Only touched on the UI thread.
+    /// </summary>
+    private bool _stoppedByUserSwitch;
+
     public MainWindow()
     {
         InitializeComponent();
 
         _config = ComfyConfig.Load(out var loadError);
         PurgeItem.IsChecked = _config.PurgeOutputsAndHistory;
+        WatchLogonItem.IsChecked = _config.WatchForUserLogon;
         _server.StateChanged += OnServerStateChanged;
+        SystemEvents.SessionSwitch += OnSessionSwitch;
         UpdateForState(_server.State);
 
         if (loadError != null)
@@ -37,6 +46,7 @@ internal sealed partial class MainWindow : Window
 
     private void Start_Click(object sender, RoutedEventArgs e)
     {
+        _stoppedByUserSwitch = false;
         try
         {
             _server.Start(_config);
@@ -48,10 +58,15 @@ internal sealed partial class MainWindow : Window
         }
     }
 
-    private void Stop_Click(object sender, RoutedEventArgs e) => _server.Stop();
+    private void Stop_Click(object sender, RoutedEventArgs e)
+    {
+        _stoppedByUserSwitch = false;
+        _server.Stop();
+    }
 
     private void Restart_Click(object sender, RoutedEventArgs e)
     {
+        _stoppedByUserSwitch = false;
         try
         {
             _server.Stop();
@@ -70,6 +85,70 @@ internal sealed partial class MainWindow : Window
         _config.PurgeOutputsAndHistory = enabled;
         _config.TrySave(out _);
         _server.SetPurgeEnabled(enabled);
+    }
+
+    private void WatchLogon_Click(object sender, RoutedEventArgs e)
+    {
+        var enabled = WatchLogonItem.IsChecked;
+        _config.WatchForUserLogon = enabled;
+        _config.TrySave(out _);
+        if (!enabled)
+        {
+            // Don't let a reconnect later resurrect a server the watch is no longer minding.
+            _stoppedByUserSwitch = false;
+        }
+    }
+
+    /// <summary>
+    /// Yields the machine to whoever takes the physical console. Fired on the SystemEvents
+    /// hidden-window thread, so marshal to the UI thread before touching state or the server.
+    /// </summary>
+    private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
+    {
+        var reason = e.Reason;
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!_config.WatchForUserLogon)
+            {
+                return;
+            }
+
+            switch (reason)
+            {
+                case SessionSwitchReason.ConsoleDisconnect:
+                    if (_server.IsRunning)
+                    {
+                        _stoppedByUserSwitch = true;
+                        _server.Stop();
+                    }
+
+                    break;
+
+                case SessionSwitchReason.ConsoleConnect:
+                    if (_stoppedByUserSwitch)
+                    {
+                        _stoppedByUserSwitch = false;
+                        TryAutoRestart();
+                    }
+
+                    break;
+
+                default:
+                    break;
+            }
+        });
+    }
+
+    private void TryAutoRestart()
+    {
+        try
+        {
+            _server.Start(_config);
+        }
+        catch (InvalidOperationException)
+        {
+            // Start already logged the reason to the ring buffer; don't pop a modal on return.
+        }
     }
 
     private void Logs_Click(object sender, RoutedEventArgs e)
@@ -114,6 +193,8 @@ internal sealed partial class MainWindow : Window
 
     private void Exit_Click(object sender, RoutedEventArgs e)
     {
+        // SystemEvents holds a static event; unsubscribe so the window isn't leaked.
+        SystemEvents.SessionSwitch -= OnSessionSwitch;
         _server.Stop();
         _server.Dispose();
         Application.Current.Shutdown();
