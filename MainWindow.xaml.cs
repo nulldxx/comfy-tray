@@ -50,6 +50,20 @@ internal sealed partial class MainWindow : Window
 
     private void Stop_Click(object sender, RoutedEventArgs e) => _server.Stop();
 
+    private void Restart_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _server.Stop();
+            _server.Start(_config);
+        }
+        catch (InvalidOperationException ex)
+        {
+            MessageBox.Show(ex.Message, "Could not restart ComfyUI",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private void Purge_Click(object sender, RoutedEventArgs e)
     {
         var enabled = PurgeItem.IsChecked;
@@ -81,6 +95,7 @@ internal sealed partial class MainWindow : Window
         TrayIcon.ToolTipText = running ? "ComfyUI: Running" : "ComfyUI: Stopped";
         StartItem.IsEnabled = !running;
         StopItem.IsEnabled = running;
+        RestartItem.IsEnabled = running;
     }
 
     private void About_Click(object sender, RoutedEventArgs e)
