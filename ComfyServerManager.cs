@@ -193,7 +193,10 @@ internal sealed class ComfyServerManager : IDisposable
             return;
         }
 
-        _outputWatcher = new OutputWatcher(config.ResolvedOutputDirectory, AppendLog);
+        // Give finished outputs (e.g. long video renders) 30 seconds before deletion,
+        // matching the input/temp grace, so a still-flushing file isn't swept too soon.
+        _outputWatcher = new OutputWatcher(
+            config.ResolvedOutputDirectory, AppendLog, TimeSpan.FromSeconds(30));
         _outputWatcher.Start();
 
         // The input folder is cleaned the same way as the output folder, but files
