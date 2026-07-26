@@ -29,6 +29,12 @@ internal sealed class ComfyServerManager : IDisposable
     /// <summary>How often the ComfyUI prompt history is wiped while the server runs.</summary>
     private static readonly TimeSpan HistoryClearInterval = TimeSpan.FromMinutes(10);
 
+    /// <summary>
+    /// How long a before-start/after-stop hook is waited on. A hook that outruns this is left
+    /// running in the background rather than holding the tray up indefinitely.
+    /// </summary>
+    private static readonly TimeSpan HookTimeout = TimeSpan.FromSeconds(30);
+
     private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(10) };
 
     private readonly object _gate = new();
@@ -50,6 +56,13 @@ internal sealed class ComfyServerManager : IDisposable
     private bool _stopping;
 
     public ComfyState State { get; private set; } = ComfyState.Stopped;
+
+    /// <summary>
+    /// The user's hook commands, run before the server starts and after it stops (including
+    /// after an unexpected exit). Owned by the UI, which replaces the values when the
+    /// configuration dialog is saved; null means no hooks are configured.
+    /// </summary>
+    public HookSettings? Hooks { get; set; }
 
     /// <summary>Raised whenever <see cref="State"/> changes.</summary>
     public event EventHandler<ComfyState>? StateChanged;
@@ -83,6 +96,12 @@ internal sealed class ComfyServerManager : IDisposable
             {
                 return;
             }
+
+            // The before-start hook is the user's chance to prepare the machine (mount a share,
+            // free the GPU), so it runs to completion — bounded by HookTimeout — before the
+            // server. The gate is held throughout: Start is short-lived and driven from the UI
+            // thread, and holding it keeps a concurrent Stop from racing the launch.
+            RunHook("before start", Hooks?.BeforeStartCommand);
 
             // Resolve the config we will actually launch. If the configured interpreter/script are
             // missing (e.g. a Desktop update relocated things), fall back to live discovery rather
@@ -321,7 +340,13 @@ internal sealed class ComfyServerManager : IDisposable
         {
             SetStateLocked(ComfyState.Stopped);
         }
+
+        // Run after the state change so the tray shows stopped while the hook is still working.
+        RunHook("after stop", Hooks?.AfterStopCommand);
     }
+
+    private void RunHook(string label, string? commandLine) =>
+        HookCommand.Run(label, commandLine, AppendLog, HookTimeout);
 
     private void OnOutput(object sender, DataReceivedEventArgs e)
     {
@@ -366,6 +391,9 @@ internal sealed class ComfyServerManager : IDisposable
         outputWatcher?.Stop();
         inputWatcher?.Stop();
         tempWatcher?.Stop();
+
+        // The server has stopped, however it went; the hook fires for a crash as it does for Stop().
+        RunHook("after stop", Hooks?.AfterStopCommand);
     }
 
     /// <summary>

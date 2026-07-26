@@ -17,6 +17,7 @@ internal sealed partial class MainWindow : Window
         new(new Uri("pack://application:,,,/icons/green.ico"));
 
     private readonly ComfyConfig _config;
+    private readonly HookSettings _hooks = HookSettings.Load();
     private readonly ComfyServerManager _server = new();
     private LogWindow? _logWindow;
 
@@ -33,6 +34,7 @@ internal sealed partial class MainWindow : Window
         _config = ComfyConfig.Load(out var loadError);
         PurgeItem.IsChecked = _config.PurgeOutputsAndHistory;
         WatchLogonItem.IsChecked = _config.WatchForUserLogon;
+        _server.Hooks = _hooks;
         _server.StateChanged += OnServerStateChanged;
         SystemEvents.SessionSwitch += OnSessionSwitch;
         UpdateForState(_server.State);
@@ -150,6 +152,14 @@ internal sealed partial class MainWindow : Window
             // Start already logged the reason to the ring buffer; don't pop a modal on return.
         }
     }
+
+    /// <summary>
+    /// Edits the before-start/after-stop hook commands. The dialog updates <see cref="_hooks"/>
+    /// in place and persists it, so the server manager — which holds the same instance — picks
+    /// up the change on its next start or stop.
+    /// </summary>
+    private void Configuration_Click(object sender, RoutedEventArgs e) =>
+        _ = new ConfigWindow(_hooks).ShowDialog();
 
     private void Logs_Click(object sender, RoutedEventArgs e)
     {

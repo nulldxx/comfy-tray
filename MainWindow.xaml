@@ -24,6 +24,7 @@
                     <MenuItem x:Name="PurgeItem" Header="Purge outputs &amp; history" IsCheckable="True" IsChecked="True" Click="Purge_Click"/>
                     <MenuItem x:Name="WatchLogonItem" Header="Watch for user logon" IsCheckable="True" Click="WatchLogon_Click"/>
                     <Separator/>
+                    <MenuItem Header="Configuration..." Click="Configuration_Click"/>
                     <MenuItem Header="Logs" Click="Logs_Click"/>
                     <Separator/>
                     <MenuItem Header="About" Click="About_Click"/>

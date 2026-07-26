@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Windows system tray application built with .NET 10 / WPF using the [H.NotifyIcon.Wpf](https://github.com/HardcodetNet/H.NotifyIcon) library. It runs a **ComfyUI server** headless in the background. The tray icon is **red when stopped (the default) and green when running**. The context menu can Start/Stop ComfyUI, open a live **Logs** window, show About, and Exit. There is no visible main window, and the ComfyUI server is launched with no console window. It includes a WiX v3 MSI installer (per-user: installs to `%LocalAppData%\Programs\ComfyTray`, no elevation, registers auto-start via `HKCU\...\Run`) and a GitHub Actions release pipeline.
+A Windows system tray application built with .NET 10 / WPF using the [H.NotifyIcon.Wpf](https://github.com/HardcodetNet/H.NotifyIcon) library. It runs a **ComfyUI server** headless in the background. The tray icon is **red when stopped (the default) and green when running**. The context menu can Start/Stop ComfyUI, open the **Configuration** dialog, open a live **Logs** window, show About, and Exit. There is no visible main window, and the ComfyUI server is launched with no console window. It includes a WiX v3 MSI installer (per-user: installs to `%LocalAppData%\Programs\ComfyTray`, no elevation, registers auto-start via `HKCU\...\Run`) and a GitHub Actions release pipeline.
 
 ### ComfyUI launch
 
@@ -12,8 +12,17 @@ The server is started as `python main.py ... --listen 0.0.0.0 ...` with `CreateN
 
 For a current Comfy Desktop **managed instance**, discovery mirrors what the Desktop app itself passes on the command line: the shared model-paths YAML (`%APPDATA%\Comfy Desktop\shared_model_paths.yaml`, falling back to the v1 `%APPDATA%\ComfyUI\extra_models_config.yaml`) becomes `--extra-model-paths-config`, and the shared input/output folders (`…\Comfy-Desktop\ComfyUI-Shared\{input,output}`, a sibling of `ComfyUI-Installs`) become `--input-directory`/`--output-directory`. `ComfyConfig.Migrate()` self-heals a `config.json` seeded by an older build (empty `ExtraModelPathsConfig`, checkout-relative input/output) by re-running discovery once and adopting these. **Note:** with input/output pointing at the shared folder, the default auto-purge (`PurgeOutputsAndHistory`) sweeps files there too — i.e. it deletes outputs/inputs shared with Comfy Desktop.
 
+### Start/stop hook commands
+
+The Configuration dialog holds two optional command lines: **Before Start** (run just before the ComfyUI process is launched) and **After Stop** (run once it has stopped, including after an unexpected exit). Each is a Windows-style command line — an executable, quoted when its path contains spaces, plus arguments passed through verbatim — and supports `%VAR%` tokens. Hooks run with `UseShellExecute=false`, `CreateNoWindow=true` and stdout/stderr redirected into the log ring buffer, so even a console program shows no window; their output appears in the Logs window prefixed with `[before start]` / `[after stop]`. `ComfyServerManager` waits up to 30s for a hook and then carries on, leaving a slow one running — a hook can never block starting or stopping ComfyUI, and a command that fails to resolve is logged rather than thrown.
+
+Unlike the launch config (`config.json`), these two values are persisted in the registry under `HKCU\Software\ComfyTray` as **base64** (UTF-8) strings — `BeforeStartCommand` and `AfterStopCommand`. The dialog refuses to save a command whose executable can't be resolved to a file on disk (as a path, or by `PATH` + `PATHEXT` search).
+
 Key source files:
 - `ComfyConfig.cs` — typed launch config + JSON load/save + argument building.
+- `HookCommand.cs` — hook command parsing (quoted/unquoted), executable resolution, hidden execution.
+- `HookSettings.cs` — registry-backed (base64) load/save of the two hook commands.
+- `ConfigWindow.xaml(.cs)` — configuration dialog with validation.
 - `ComfyDiscovery.cs` — dynamic discovery of ComfyUI installations across portable/Desktop layouts (capability detection, not version detection).
 - `ComfyServerManager.cs` — process lifecycle (start/stop entire tree), state, log ring buffer.
 - `MainWindow.xaml(.cs)` — tray icon, context menu, red/green state.
