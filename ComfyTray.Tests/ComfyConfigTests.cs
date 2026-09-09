@@ -107,4 +107,10 @@ public sealed class ComfyConfigTests : IDisposable
     {
         Assert.False(new ComfyConfig().WatchForUserLogon);
     }
+
+    [Fact]
+    public void BlockOutboundNetwork_DefaultsOff()
+    {
+        Assert.False(new ComfyConfig().BlockOutboundNetwork);
+    }
 }

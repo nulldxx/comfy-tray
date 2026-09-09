@@ -72,6 +72,13 @@ internal sealed class ComfyConfig
     public bool WatchForUserLogon { get; set; }
 
     /// <summary>
+    /// When true, the server process is launched with its environment set against outbound
+    /// network access (see <see cref="NetworkIsolation"/>). Default off. Toggled from the
+    /// tray menu; takes effect the next time ComfyUI starts.
+    /// </summary>
+    public bool BlockOutboundNetwork { get; set; }
+
+    /// <summary>
     /// Working directory for the server process. When null/empty it defaults to the
     /// directory containing <see cref="MainScript"/>.
     /// </summary>

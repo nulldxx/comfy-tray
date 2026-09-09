@@ -126,6 +126,19 @@ internal sealed class ComfyServerManager : IDisposable
                 psi.ArgumentList.Add(arg);
             }
 
+            // Stack the child's environment against reaching out. Deliberately scoped to this
+            // process (and whatever it spawns) rather than to the interpreter on disk: the same
+            // python.exe is a general-purpose tool that must keep working everywhere else.
+            if (effective.BlockOutboundNetwork)
+            {
+                NetworkIsolation.Apply(psi.Environment);
+                AppendLog(
+                    $"[comfy-tray] outbound blocking ON: {NetworkIsolation.VariableCount} environment " +
+                    "variables set (dead proxy + offline switches). Best effort only — it stops " +
+                    "libraries that honour proxy/offline settings, not a node using a raw socket. " +
+                    "Loopback and the inbound port are unaffected.");
+            }
+
             var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
             process.OutputDataReceived += OnOutput;
             process.ErrorDataReceived += OnOutput;
@@ -193,6 +206,7 @@ internal sealed class ComfyServerManager : IDisposable
         effective.Port = requested.Port;
         effective.LogStdout = requested.LogStdout;
         effective.PurgeOutputsAndHistory = requested.PurgeOutputsAndHistory;
+        effective.BlockOutboundNetwork = requested.BlockOutboundNetwork;
         effective.ExtraArguments = requested.ExtraArguments;
         AppendLog(
             $"[comfy-tray] discovered {best.Kind} installation ({best.Source}); " +

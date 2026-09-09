@@ -23,6 +23,7 @@
                     <Separator/>
                     <MenuItem x:Name="PurgeItem" Header="Purge outputs &amp; history" IsCheckable="True" IsChecked="True" Click="Purge_Click"/>
                     <MenuItem x:Name="WatchLogonItem" Header="Watch for user logon" IsCheckable="True" Click="WatchLogon_Click"/>
+                    <MenuItem x:Name="BlockOutboundItem" Header="Block outbound network (best effort)" IsCheckable="True" Click="BlockOutbound_Click"/>
                     <Separator/>
                     <MenuItem Header="Configuration..." Click="Configuration_Click"/>
                     <MenuItem Header="Logs" Click="Logs_Click"/>

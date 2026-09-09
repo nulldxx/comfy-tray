@@ -34,6 +34,7 @@ internal sealed partial class MainWindow : Window
         _config = ComfyConfig.Load(out var loadError);
         PurgeItem.IsChecked = _config.PurgeOutputsAndHistory;
         WatchLogonItem.IsChecked = _config.WatchForUserLogon;
+        BlockOutboundItem.IsChecked = _config.BlockOutboundNetwork;
         _server.Hooks = _hooks;
         _server.StateChanged += OnServerStateChanged;
         SystemEvents.SessionSwitch += OnSessionSwitch;
@@ -87,6 +88,28 @@ internal sealed partial class MainWindow : Window
         _config.PurgeOutputsAndHistory = enabled;
         _config.TrySave(out _);
         _server.SetPurgeEnabled(enabled);
+    }
+
+    /// <summary>
+    /// Toggles best-effort outbound blocking for the server process. The environment is fixed
+    /// when the process is created, so a change only bites on the next start — say so rather
+    /// than let the user believe a running server just changed behaviour.
+    /// </summary>
+    private void BlockOutbound_Click(object sender, RoutedEventArgs e)
+    {
+        var enabled = BlockOutboundItem.IsChecked;
+        _config.BlockOutboundNetwork = enabled;
+        _config.TrySave(out _);
+
+        if (_server.State == ComfyState.Running)
+        {
+            MessageBox.Show(
+                (enabled
+                    ? "Outbound blocking will apply the next time ComfyUI starts."
+                    : "Outbound blocking will be lifted the next time ComfyUI starts.") +
+                "\n\nRestart ComfyUI from the tray menu to apply it now.",
+                "ComfyUI Tray", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
     }
 
     private void WatchLogon_Click(object sender, RoutedEventArgs e)

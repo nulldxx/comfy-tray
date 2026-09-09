@@ -11,7 +11,8 @@
     referenced from this cross-platform test project. They depend only on System.IO /
     Threading / Text.Json / Diagnostics, so we compile the sources directly into the test
     assembly instead. (ComfyConfig references ComfyDiscovery, so both are included.)
-    HookSettings is deliberately absent: its registry access is Windows-only.
+    HookSettings is deliberately absent: its registry access is Windows-only. NetworkIsolation
+    is included both to test it and so ComfyConfig's cref to it resolves here.
   -->
   <ItemGroup>
     <Compile Include="..\OutputWatcher.cs" Link="OutputWatcher.cs" />
@@ -19,6 +20,7 @@
     <Compile Include="..\ComfyConfig.cs" Link="ComfyConfig.cs" />
     <Compile Include="..\HookCommand.cs" Link="HookCommand.cs" />
     <Compile Include="..\Base64Text.cs" Link="Base64Text.cs" />
+    <Compile Include="..\NetworkIsolation.cs" Link="NetworkIsolation.cs" />
   </ItemGroup>
 
   <ItemGroup>
