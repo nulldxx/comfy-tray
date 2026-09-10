@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <?define ProductVersion="1.0.0.0" ?>
+  <?include Version.wxi ?>
   <?define ProductName="ComfyUI Tray" ?>
   <?define Manufacturer="ComfyUI Tray" ?>
   <?define UpgradeCode="AB6EE5DF-3A05-478E-92A7-49E82533AEB7" ?>

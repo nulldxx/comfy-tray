@@ -202,12 +202,7 @@ internal sealed class ComfyServerManager : IDisposable
 
         var effective = ComfyConfig.FromInstallation(best);
         // Preserve the user's runtime preferences; only the install paths are taken from discovery.
-        effective.Host = requested.Host;
-        effective.Port = requested.Port;
-        effective.LogStdout = requested.LogStdout;
-        effective.PurgeOutputsAndHistory = requested.PurgeOutputsAndHistory;
-        effective.BlockOutboundNetwork = requested.BlockOutboundNetwork;
-        effective.ExtraArguments = requested.ExtraArguments;
+        effective.CopyRuntimePreferencesFrom(requested);
         AppendLog(
             $"[comfy-tray] discovered {best.Kind} installation ({best.Source}); " +
             $"launching {effective.ResolvedPythonPath}");

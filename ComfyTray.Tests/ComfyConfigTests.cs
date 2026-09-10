@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using Xunit;
 
 namespace ComfyTray.Tests;
@@ -112,5 +113,85 @@ public sealed class ComfyConfigTests : IDisposable
     public void BlockOutboundNetwork_DefaultsOff()
     {
         Assert.False(new ComfyConfig().BlockOutboundNetwork);
+    }
+
+    /// <summary>
+    /// Properties that describe where ComfyUI is installed rather than how the user wants it
+    /// run. These are the ones discovery is allowed to replace, so they are the only ones
+    /// <see cref="ComfyConfig.CopyRuntimePreferencesFrom"/> may leave behind.
+    /// </summary>
+    private static readonly string[] InstallPathProperties =
+    [
+        nameof(ComfyConfig.PythonPath),
+        nameof(ComfyConfig.MainScript),
+        nameof(ComfyConfig.BaseDirectory),
+        nameof(ComfyConfig.UserDirectory),
+        nameof(ComfyConfig.InputDirectory),
+        nameof(ComfyConfig.OutputDirectory),
+        nameof(ComfyConfig.TempDirectory),
+        nameof(ComfyConfig.FrontEndRoot),
+        nameof(ComfyConfig.ExtraModelPathsConfig),
+        nameof(ComfyConfig.DatabaseUrl),
+        nameof(ComfyConfig.WorkingDirectory),
+    ];
+
+    /// <summary>
+    /// Every settable property is either an install path or a runtime preference. A preference
+    /// added to <see cref="ComfyConfig"/> but forgotten in
+    /// <see cref="ComfyConfig.CopyRuntimePreferencesFrom"/> would silently revert to its default
+    /// the first time discovery relocated ComfyUI — a bug with no visible symptom at the point it
+    /// is introduced. Reflecting over the type is what makes that impossible to miss.
+    /// </summary>
+    [Fact]
+    public void CopyRuntimePreferencesFrom_CopiesEveryNonInstallProperty()
+    {
+        var preferences = typeof(ComfyConfig)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanRead && p.CanWrite && !InstallPathProperties.Contains(p.Name))
+            .ToList();
+
+        Assert.NotEmpty(preferences);
+
+        var source = new ComfyConfig();
+        foreach (var property in preferences)
+        {
+            property.SetValue(source, Mutate(property.GetValue(source)));
+        }
+
+        var target = new ComfyConfig();
+        target.CopyRuntimePreferencesFrom(source);
+
+        foreach (var property in preferences)
+        {
+            Assert.Equal(property.GetValue(source), property.GetValue(target));
+        }
+    }
+
+    /// <summary>Returns a value of the same type that differs from <paramref name="current"/>.</summary>
+    private static object Mutate(object? current) => current switch
+    {
+        bool b => !b,
+        int i => i + 1,
+        string s => s + "-changed",
+        List<string> => new List<string> { "--changed" },
+        null => "changed",
+        _ => throw new NotSupportedException(
+            $"ComfyConfig gained a property of type {current.GetType()}; teach Mutate about it."),
+    };
+
+    /// <summary>
+    /// The carry-across only replaces preferences, so a rediscovered installation keeps the
+    /// paths discovery found for it.
+    /// </summary>
+    [Fact]
+    public void CopyRuntimePreferencesFrom_LeavesInstallPathsAlone()
+    {
+        var source = new ComfyConfig { PythonPath = @"C:\old\python.exe", Port = 9999 };
+        var target = new ComfyConfig { PythonPath = @"C:\discovered\python.exe" };
+
+        target.CopyRuntimePreferencesFrom(source);
+
+        Assert.Equal(@"C:\discovered\python.exe", target.PythonPath);
+        Assert.Equal(9999, target.Port);
     }
 }

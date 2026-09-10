@@ -61,16 +61,16 @@ jobs:
       - name: Update WiX Product Version
         run: |
           $version = "${{ steps.version.outputs.NUMERIC_VERSION }}"
-          $wxsPath = "ComfyTray.Installer/Product.wxs"
+          $wxsPath = "Version.wxi"
 
-          Write-Host "Updating Product.wxs with version: $version"
+          Write-Host "Updating Version.wxi with version: $version"
 
           $content = Get-Content $wxsPath -Raw
           $content = $content -replace '(?<=<\?define ProductVersion=")[\d\.]*(?=" \?>)', $version
 
           Set-Content $wxsPath -Value $content -NoNewline
 
-          Write-Host "Product.wxs updated"
+          Write-Host "Version.wxi updated"
           Get-Content $wxsPath | Select-String "define ProductVersion"
 
       - name: Restore dependencies

@@ -8,6 +8,12 @@
     <SchemaVersion>2.0</SchemaVersion>
     <OutputName>ComfyTraySetup</OutputName>
     <OutputType>Package</OutputType>
+    <!--
+      Passed to candle as -I. Product.wxs includes Version.wxi from the repo root by bare
+      name, so the include resolves the same however msbuild was invoked and whatever the
+      working directory happens to be.
+    -->
+    <IncludeSearchPaths>$(MSBuildThisFileDirectory)..</IncludeSearchPaths>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
     <OutputPath>bin\$(Platform)\$(Configuration)\</OutputPath>

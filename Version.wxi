@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Single source of the version stamped into every WiX output. The release workflow rewrites
+  the ProductVersion define here and nowhere else, so the tray MSI, the guard MSI and the
+  bundle cannot drift apart. Keep the define on one line: CI matches it with a regex.
+-->
+<Include xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <?define ProductVersion="1.0.0.0" ?>
+</Include>

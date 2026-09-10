@@ -87,6 +87,34 @@ internal sealed class ComfyConfig
     /// <summary>Any additional raw arguments to append verbatim.</summary>
     public List<string> ExtraArguments { get; set; } = [];
 
+    /// <summary>
+    /// Copies the user's runtime preferences from <paramref name="other"/>, leaving this
+    /// instance's install paths untouched. Used when discovery has relocated ComfyUI: the
+    /// paths come from the newly found installation, everything the user chose comes from
+    /// the config they had.
+    ///
+    /// <para>
+    /// Every settable property is either an install path or a runtime preference, and the
+    /// preferences all belong here. A property added to this class and forgotten here would
+    /// silently revert the first time ComfyUI moved, so
+    /// <c>ComfyConfigTests.CopyRuntimePreferencesFrom_CopiesEveryNonInstallProperty</c>
+    /// reflects over the type and fails if one goes missing.
+    /// </para>
+    /// </summary>
+    public void CopyRuntimePreferencesFrom(ComfyConfig other)
+    {
+        System.ArgumentNullException.ThrowIfNull(other);
+
+        Host = other.Host;
+        Port = other.Port;
+        EnableManager = other.EnableManager;
+        LogStdout = other.LogStdout;
+        PurgeOutputsAndHistory = other.PurgeOutputsAndHistory;
+        WatchForUserLogon = other.WatchForUserLogon;
+        BlockOutboundNetwork = other.BlockOutboundNetwork;
+        ExtraArguments = other.ExtraArguments;
+    }
+
     private static string Expand(string value) =>
         System.Environment.ExpandEnvironmentVariables(value);
 
