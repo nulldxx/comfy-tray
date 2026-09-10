@@ -37,15 +37,24 @@ internal static class PythonImagePaths
     /// <param name="interpreterPath">The configured interpreter, as ComfyConfig resolved it.</param>
     /// <param name="exists">Probe for a file's existence. Defaults to the real filesystem.</param>
     /// <param name="readText">Reads a file, returning null when it cannot be read.</param>
+    /// <param name="expandPath">
+    /// Resolves a path to its long form. A rule created for an 8.3 short name
+    /// (<c>C:\PROGRA~1\...</c>) never matches the process it was meant for, and a configured
+    /// interpreter or a <c>pyvenv.cfg</c> home can easily be written that way. Defaults to
+    /// leaving paths alone, since expanding one is a Windows call and this file has to stay
+    /// portable; the tray passes the real thing.
+    /// </param>
     public static IReadOnlyList<string> ForInterpreter(
         string interpreterPath,
         Func<string, bool>? exists = null,
-        Func<string, string?>? readText = null)
+        Func<string, string?>? readText = null,
+        Func<string, string>? expandPath = null)
     {
         exists ??= File.Exists;
         readText ??= TryReadAllText;
+        expandPath ??= path => path;
 
-        var interpreter = GuardPathSet.Normalize(interpreterPath);
+        var interpreter = GuardPathSet.Normalize(expandPath(interpreterPath));
         if (interpreter.Length == 0)
         {
             return [];
@@ -74,6 +83,8 @@ internal static class PythonImagePaths
         {
             return GuardPathSet.Admit(found);
         }
+
+        home = GuardPathSet.Normalize(expandPath(home));
 
         var baseInterpreter = GuardPathSet.Combine(home, "python.exe");
         if (exists(baseInterpreter))
@@ -130,7 +141,9 @@ internal static class PythonImagePaths
                 continue;
             }
 
-            var value = GuardPathSet.Normalize(line[(separator + 1)..]);
+            // Returned raw: the caller expands short paths before normalising, and normalising
+            // here would lower-case the value first and defeat the expansion.
+            var value = line[(separator + 1)..].Trim();
             return value.Length == 0 ? null : value;
         }
 

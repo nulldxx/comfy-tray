@@ -71,6 +71,20 @@ internal sealed class ComfyServerManager : IDisposable
     /// </summary>
     public GuardClient? Guard { get; set; }
 
+    /// <summary>
+    /// The job object holding the ComfyUI process tree while firewall enforcement is on. Created
+    /// kill-on-close, so disposing it takes the tree with it.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Usage", "CA2213:Disposable fields should be disposed",
+        Justification = "Owned for the lifetime of a run; disposed by Stop and OnProcessExited.")]
+    private JobObject? _job;
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Usage", "CA2213:Disposable fields should be disposed",
+        Justification = "Owned for the lifetime of a run; disposed by Stop and OnProcessExited.")]
+    private JobProcessTracker? _tracker;
+
     /// <summary>Raised whenever <see cref="State"/> changes.</summary>
     public event EventHandler<ComfyState>? StateChanged;
 
@@ -151,9 +165,10 @@ internal sealed class ComfyServerManager : IDisposable
             // interpreter is both the overwhelmingly common exfiltration route and the one path
             // known ahead of time. Blocking it here closes that window completely; everything
             // discovered later is inherently a step behind.
+            IReadOnlyList<string> preBlocked = [];
             if (effective.Mode == OutboundMode.Firewall)
             {
-                StartGuardSessionLocked(effective);
+                preBlocked = StartGuardSessionLocked(effective);
             }
 
             var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
@@ -176,6 +191,11 @@ internal sealed class ComfyServerManager : IDisposable
 
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
+
+            if (effective.Mode == OutboundMode.Firewall && Guard?.HasSession == true)
+            {
+                StartTrackingLocked(process, preBlocked);
+            }
 
             _process = process;
             SetStateLocked(ComfyState.Running);
@@ -203,7 +223,7 @@ internal sealed class ComfyServerManager : IDisposable
     /// not run at all than run unenforced.
     /// </para>
     /// </summary>
-    private void StartGuardSessionLocked(ComfyConfig effective)
+    private IReadOnlyList<string> StartGuardSessionLocked(ComfyConfig effective)
     {
         var guard = Guard;
 
@@ -211,13 +231,17 @@ internal sealed class ComfyServerManager : IDisposable
         // session is opened without one.
         if (guard != null && guard.TryBeginSession(comfyPid: 0, out _))
         {
-            var images = PythonImagePaths.ForInterpreter(effective.ResolvedPythonPath);
+            // Short paths are expanded first: a firewall rule matches the executable path
+            // literally, so one created for C:\PROGRA~1\... never matches the process it meant.
+            var images = PythonImagePaths.ForInterpreter(
+                effective.ResolvedPythonPath, expandPath: TrayNativeMethods.GetLongPath);
+
             if (guard.TryBlockImages(images))
             {
                 AppendLog(
                     $"[comfy-tray] firewall enforcement ON: {images.Count} interpreter image(s) " +
                     "blocked outbound before launch. Loopback and the inbound port are unaffected.");
-                return;
+                return images;
             }
         }
 
@@ -234,6 +258,47 @@ internal sealed class ComfyServerManager : IDisposable
             $"[comfy-tray] firewall enforcement requested but the guard service is {reason}; " +
             "falling back to environment-variable isolation only. Blocking is best effort until " +
             "the guard is available.");
+        return [];
+    }
+
+    /// <summary>
+    /// Puts the server into a job object and starts watching it for the executables custom nodes
+    /// spawn. Caller must hold <see cref="_gate"/>.
+    ///
+    /// <para>
+    /// Failing here is survivable, and says so rather than failing the launch: the interpreter is
+    /// already blocked, so the common case is covered, and what is lost is the executables a node
+    /// starts later.
+    /// </para>
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Design", "CA1031:DoNotCatchGeneralExceptionTypes",
+        Justification = "Tracking enhances pre-blocking; losing it is logged, never fatal to a launch.")]
+    private void StartTrackingLocked(Process process, IReadOnlyList<string> preBlocked)
+    {
+        JobObject? job = null;
+        try
+        {
+            // Kill-on-close ties the tree's life to the tray's. The guard drops its rules the
+            // moment our pipe does, and a ComfyUI still running after that would be an unguarded
+            // server the user believes is contained.
+            job = new JobObject(killOnClose: true);
+            job.Assign(process);
+
+            var tracker = new JobProcessTracker(job, Guard!, AppendLog);
+            tracker.Start(preBlocked);
+
+            _job = job;
+            _tracker = tracker;
+        }
+        catch (Exception ex)
+        {
+            job?.Dispose();
+            AppendLog(
+                $"[comfy-tray] could not track the ComfyUI process tree: {ex.Message}. " +
+                "The interpreter is still blocked, but executables started by custom nodes " +
+                "will not be.");
+        }
     }
 
     /// <summary>
@@ -366,6 +431,8 @@ internal sealed class ComfyServerManager : IDisposable
         OutputWatcher? inputWatcher;
         OutputWatcher? tempWatcher;
         Timer? historyClearTimer;
+        JobProcessTracker? tracker;
+        JobObject? job;
         lock (_gate)
         {
             process = _process;
@@ -384,10 +451,15 @@ internal sealed class ComfyServerManager : IDisposable
             _tempWatcher = null;
             historyClearTimer = _historyClearTimer;
             _historyClearTimer = null;
+            tracker = _tracker;
+            _tracker = null;
+            job = _job;
+            _job = null;
         }
 
-        // A crash is a teardown too: the rules must not outlive the process they were for.
-        Guard?.EndSession();
+        // Before the tree comes down, so a scan in flight cannot ask the guard to block
+        // something that is already gone.
+        tracker?.Dispose();
 
         historyClearTimer?.Dispose();
         outputWatcher?.Stop();
@@ -411,8 +483,12 @@ internal sealed class ComfyServerManager : IDisposable
             process.Dispose();
         }
 
-        // After the tree is gone, so nothing is left running unguarded between the rules being
-        // removed and the process dying.
+        // Closing the job kills anything the tree left behind, since it was created
+        // kill-on-close. Belt and braces alongside the Kill above, not a replacement for it.
+        job?.Dispose();
+
+        // Last, so that nothing is ever left running unguarded in the gap between the rules
+        // being removed and the process actually dying.
         Guard?.EndSession();
 
         lock (_gate)
@@ -441,6 +517,8 @@ internal sealed class ComfyServerManager : IDisposable
         OutputWatcher? inputWatcher;
         OutputWatcher? tempWatcher;
         Timer? historyClearTimer;
+        JobProcessTracker? tracker;
+        JobObject? job;
         lock (_gate)
         {
             // Stop() handles its own state transition; ignore the resulting Exited.
@@ -463,8 +541,17 @@ internal sealed class ComfyServerManager : IDisposable
             _tempWatcher = null;
             historyClearTimer = _historyClearTimer;
             _historyClearTimer = null;
+            tracker = _tracker;
+            _tracker = null;
+            job = _job;
+            _job = null;
             SetStateLocked(ComfyState.Stopped);
         }
+
+        // A crash is a teardown too: rules must not outlive the process they were created for.
+        tracker?.Dispose();
+        job?.Dispose();
+        Guard?.EndSession();
 
         historyClearTimer?.Dispose();
         outputWatcher?.Stop();

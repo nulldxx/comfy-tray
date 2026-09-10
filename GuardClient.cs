@@ -10,6 +10,45 @@ using Microsoft.Win32;
 namespace ComfyTray;
 
 /// <summary>
+/// Win32 helpers the tray needs for firewall enforcement.
+/// </summary>
+internal static partial class TrayNativeMethods
+{
+    /// <summary>
+    /// Expands an 8.3 short path to its long form.
+    ///
+    /// <para>
+    /// A firewall rule stores the executable path as text and matches it literally, so a rule
+    /// created for <c>C:\PROGRA~1\...</c> never matches the process it was meant for. A path a
+    /// user typed into the configuration, or one recorded in a <c>pyvenv.cfg</c>, can easily be
+    /// in that form. Returns the input unchanged when it cannot be expanded, which includes the
+    /// common case of it already being long.
+    /// </para>
+    /// </summary>
+    public static string GetLongPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return path;
+        }
+
+        var buffer = new char[1024];
+        var length = GetLongPathNameW(path, buffer, (uint)buffer.Length);
+
+        return length > 0 && length < buffer.Length
+            ? new string(buffer, 0, (int)length)
+            : path;
+    }
+
+    [System.Runtime.InteropServices.LibraryImport(
+        "kernel32.dll",
+        SetLastError = true,
+        StringMarshalling = System.Runtime.InteropServices.StringMarshalling.Utf16)]
+    private static partial uint GetLongPathNameW(
+        string shortPath, [System.Runtime.InteropServices.Out] char[] longPath, uint bufferLength);
+}
+
+/// <summary>
 /// The tray's side of the conversation with the guard service.
 ///
 /// <para>

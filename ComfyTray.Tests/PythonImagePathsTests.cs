@@ -122,4 +122,32 @@ public sealed class PythonImagePathsTests
     [InlineData("   ")]
     public void ReturnsNothingForNoInterpreter(string path) =>
         Assert.Empty(PythonImagePaths.ForInterpreter(path, Existing(), _ => null));
+
+    /// <summary>
+    /// A firewall rule created for an 8.3 short name never matches the process it was meant for,
+    /// and a configured interpreter path can easily be written that way.
+    /// </summary>
+    [Fact]
+    public void ExpandsShortPathsBeforeBuildingRules()
+    {
+        var paths = PythonImagePaths.ForInterpreter(
+            @"C:\PROGRA~1\ComfyUI\python.exe",
+            Existing(),
+            _ => null,
+            expandPath: p => p.Replace("PROGRA~1", "Program Files", StringComparison.Ordinal));
+
+        Assert.Equal([@"c:\program files\comfyui\python.exe"], paths);
+    }
+
+    [Fact]
+    public void ExpandsAShortPyvenvCfgHome()
+    {
+        var paths = PythonImagePaths.ForInterpreter(
+            VenvPython,
+            Existing(@"c:\comfyui\.venv\pyvenv.cfg", @"c:\program files\python312\python.exe"),
+            _ => @"home = C:\PROGRA~1\Python312",
+            expandPath: p => p.Replace("PROGRA~1", "Program Files", StringComparison.Ordinal));
+
+        Assert.Contains(@"c:\program files\python312\python.exe", paths);
+    }
 }
