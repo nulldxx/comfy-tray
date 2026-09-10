@@ -115,6 +115,36 @@ public sealed class ComfyConfigTests : IDisposable
         Assert.False(new ComfyConfig().BlockOutboundNetwork);
     }
 
+    [Fact]
+    public void EnforceWithFirewall_DefaultsOff() =>
+        Assert.False(new ComfyConfig().EnforceWithFirewall);
+
+    /// <summary>
+    /// Fail-open by default: losing the guard mid-render and having the server killed under you
+    /// is worse for most people than dropping back to environment-variable isolation.
+    /// </summary>
+    [Fact]
+    public void RequireFirewallGuard_DefaultsOff() =>
+        Assert.False(new ComfyConfig().RequireFirewallGuard);
+
+    /// <summary>
+    /// Firewall enforcement is an addition to environment-variable isolation, not an
+    /// alternative to it, so it only means anything while blocking is on at all.
+    /// </summary>
+    [Fact]
+    public void Mode_DerivesFromTheTwoFlags()
+    {
+        // Written as one test rather than a Theory because OutboundMode is internal and xunit
+        // needs public signatures for its parameters.
+        static OutboundMode Mode(bool block, bool firewall) =>
+            new ComfyConfig { BlockOutboundNetwork = block, EnforceWithFirewall = firewall }.Mode;
+
+        Assert.Equal(OutboundMode.None, Mode(block: false, firewall: false));
+        Assert.Equal(OutboundMode.None, Mode(block: false, firewall: true));
+        Assert.Equal(OutboundMode.EnvironmentOnly, Mode(block: true, firewall: false));
+        Assert.Equal(OutboundMode.Firewall, Mode(block: true, firewall: true));
+    }
+
     /// <summary>
     /// Properties that describe where ComfyUI is installed rather than how the user wants it
     /// run. These are the ones discovery is allowed to replace, so they are the only ones

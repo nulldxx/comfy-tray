@@ -11,6 +11,8 @@
     <RootNamespace>ComfyTray</RootNamespace>
     <AssemblyName>ComfyTrayGuard</AssemblyName>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Required by the [LibraryImport] source generator (SYSLIB1062). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!--
       Built-in COM interop is not supported under NativeAOT and [ComImport] types are not
       trim-safe, so this project is published framework-dependent and untrimmed. Single-file
@@ -25,6 +27,13 @@
     -->
     <NoWarn>$(NoWarn);CA1303</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ServiceBase is not in the shared framework on .NET; this is where it lives. -->
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.1" />
+    <!-- PipeSecurity and NamedPipeServerStreamAcl, likewise. -->
+    <PackageReference Include="System.IO.Pipes.AccessControl" Version="5.0.0" />
+  </ItemGroup>
 
   <!--
     Shared with the tray and the test project by source rather than by assembly reference. It is

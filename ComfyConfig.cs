@@ -79,6 +79,32 @@ internal sealed class ComfyConfig
     public bool BlockOutboundNetwork { get; set; }
 
     /// <summary>
+    /// When true — and only when <see cref="BlockOutboundNetwork"/> is also true — the ComfyTray
+    /// Guard service is asked to add Windows Firewall block rules for the ComfyUI process tree,
+    /// turning best-effort isolation into enforcement. Default off. Has no effect when the guard
+    /// service is not installed, in which case the environment variables still apply.
+    /// </summary>
+    public bool EnforceWithFirewall { get; set; }
+
+    /// <summary>
+    /// When true, ComfyUI refuses to start unless firewall enforcement is actually in force.
+    /// Default off, deliberately: losing the guard mid-render and having the server killed under
+    /// you is worse for most people than dropping back to environment-variable isolation and
+    /// saying so. Turn it on when the enforcement matters more than the run.
+    /// </summary>
+    public bool RequireFirewallGuard { get; set; }
+
+    /// <summary>
+    /// The effective outbound policy, derived from the two flags above. Not persisted — the
+    /// flags are the stored state, this is how the rest of the code reads them.
+    /// </summary>
+    [JsonIgnore]
+    public OutboundMode Mode =>
+        !BlockOutboundNetwork ? OutboundMode.None
+        : EnforceWithFirewall ? OutboundMode.Firewall
+        : OutboundMode.EnvironmentOnly;
+
+    /// <summary>
     /// Working directory for the server process. When null/empty it defaults to the
     /// directory containing <see cref="MainScript"/>.
     /// </summary>
@@ -112,6 +138,8 @@ internal sealed class ComfyConfig
         PurgeOutputsAndHistory = other.PurgeOutputsAndHistory;
         WatchForUserLogon = other.WatchForUserLogon;
         BlockOutboundNetwork = other.BlockOutboundNetwork;
+        EnforceWithFirewall = other.EnforceWithFirewall;
+        RequireFirewallGuard = other.RequireFirewallGuard;
         ExtraArguments = other.ExtraArguments;
     }
 

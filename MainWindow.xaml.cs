@@ -19,6 +19,7 @@ internal sealed partial class MainWindow : Window
     private readonly ComfyConfig _config;
     private readonly HookSettings _hooks = HookSettings.Load();
     private readonly ComfyServerManager _server = new();
+    private GuardClient? _guard;
     private LogWindow? _logWindow;
 
     /// <summary>
@@ -36,6 +37,12 @@ internal sealed partial class MainWindow : Window
         WatchLogonItem.IsChecked = _config.WatchForUserLogon;
         BlockOutboundItem.IsChecked = _config.BlockOutboundNetwork;
         _server.Hooks = _hooks;
+
+        // The guard's own log lines go through the same sink as everything else, so they appear
+        // in the Logs window without any further plumbing.
+        _guard = new GuardClient(_server.AppendExternalLog);
+        _server.Guard = _guard;
+
         _server.StateChanged += OnServerStateChanged;
         SystemEvents.SessionSwitch += OnSessionSwitch;
         UpdateForState(_server.State);
@@ -229,6 +236,12 @@ internal sealed partial class MainWindow : Window
         // SystemEvents holds a static event; unsubscribe so the window isn't leaked.
         SystemEvents.SessionSwitch -= OnSessionSwitch;
         _server.Stop();
+
+        // After Stop, which has already ended the session cleanly. This is the backstop for the
+        // case where there was no server running but a session somehow survived.
+        _guard?.Dispose();
+        _guard = null;
+
         _server.Dispose();
         Application.Current.Shutdown();
     }

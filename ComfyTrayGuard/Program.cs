@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
+using System.ServiceProcess;
+using System.Threading;
 
 namespace ComfyTray;
 
@@ -10,9 +12,8 @@ namespace ComfyTray;
 /// Console entry point for ComfyTray Guard.
 ///
 /// <para>
-/// At this stage the guard is a command-line tool rather than a service: it proves the firewall
-/// half of the design — the COM interop, the rule shape, the ownership test and the bulk purge —
-/// on its own, before any of the IPC that will eventually drive it exists.
+/// With no arguments it runs as a Windows service, which is how it is installed. The remaining
+/// verbs are for development and for the escape hatch below.
 /// </para>
 ///
 /// <para>
@@ -41,8 +42,15 @@ internal static class Program
     {
         if (args.Length == 0)
         {
-            PrintUsage();
-            return 2;
+            // No console attached and nothing asked of us: this is the Service Control Manager
+            // starting us, which is the normal case.
+            ServiceBase.Run(new GuardService(console: false));
+            return 0;
+        }
+
+        if (string.Equals(args[0], "--console", StringComparison.OrdinalIgnoreCase))
+        {
+            return RunInteractive();
         }
 
         try
@@ -67,6 +75,27 @@ internal static class Program
                 "requires administrator rights. Try again from an elevated prompt.");
             return 1;
         }
+    }
+
+    /// <summary>
+    /// Runs the service loop in a console so it can be debugged without installing anything.
+    /// Ctrl+C stops it the same way the Service Control Manager would, so the teardown path
+    /// being exercised is the real one.
+    /// </summary>
+    private static int RunInteractive()
+    {
+        using var stopping = new CancellationTokenSource();
+        using var service = new GuardService(console: true);
+
+        Console.CancelKeyPress += (_, e) =>
+        {
+            e.Cancel = true;
+            stopping.Cancel();
+        };
+
+        Console.WriteLine("Running in the console. Press Ctrl+C to stop.");
+        service.RunInteractive(stopping.Token);
+        return 0;
     }
 
     private static int List(IFirewallRuleStore store)
@@ -199,6 +228,9 @@ internal static class Program
         Console.WriteLine("  --block <path>...  block outbound traffic from the given executables");
         Console.WriteLine("  --purge            remove every rule this service owns");
         Console.WriteLine("  --health           report whether the firewall will honour these rules");
+        Console.WriteLine("  --console          run the service loop in this console, for debugging");
+        Console.WriteLine();
+        Console.WriteLine("With no arguments, runs as the ComfyTrayGuard Windows service.");
         Console.WriteLine();
         Console.WriteLine("Creating or removing rules requires administrator rights.");
     }

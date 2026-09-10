@@ -64,6 +64,13 @@ internal sealed class ComfyServerManager : IDisposable
     /// </summary>
     public HookSettings? Hooks { get; set; }
 
+    /// <summary>
+    /// The connection to the ComfyTray Guard service, used when the outbound policy is
+    /// <see cref="OutboundMode.Firewall"/>. Owned by the UI; null means firewall enforcement is
+    /// unavailable and the server falls back to environment-variable isolation.
+    /// </summary>
+    public GuardClient? Guard { get; set; }
+
     /// <summary>Raised whenever <see cref="State"/> changes.</summary>
     public event EventHandler<ComfyState>? StateChanged;
 
@@ -139,6 +146,16 @@ internal sealed class ComfyServerManager : IDisposable
                     "Loopback and the inbound port are unaffected.");
             }
 
+            // Ask the guard for rules *before* the process exists. Windows Firewall filters new
+            // connections, so a socket opened before its rule lands keeps working — and the
+            // interpreter is both the overwhelmingly common exfiltration route and the one path
+            // known ahead of time. Blocking it here closes that window completely; everything
+            // discovered later is inherently a step behind.
+            if (effective.Mode == OutboundMode.Firewall)
+            {
+                StartGuardSessionLocked(effective);
+            }
+
             var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
             process.OutputDataReceived += OnOutput;
             process.ErrorDataReceived += OnOutput;
@@ -171,6 +188,52 @@ internal sealed class ComfyServerManager : IDisposable
                 StartPurgingLocked();
             }
         }
+    }
+
+    /// <summary>
+    /// Opens a guard session and blocks the interpreter before it runs. Caller must hold
+    /// <see cref="_gate"/>.
+    ///
+    /// <para>
+    /// Fails soft unless the user has asked otherwise. A missing or stopped guard service means
+    /// the launch proceeds with environment-variable isolation and a log line saying so — killing
+    /// a launch because a service is not running would be a poor trade for most people, and the
+    /// isolation that remains is exactly what they had before this feature existed.
+    /// <see cref="ComfyConfig.RequireFirewallGuard"/> reverses that for anyone who would rather
+    /// not run at all than run unenforced.
+    /// </para>
+    /// </summary>
+    private void StartGuardSessionLocked(ComfyConfig effective)
+    {
+        var guard = Guard;
+
+        // The PID is not known yet — that is the point of blocking at this moment — so the
+        // session is opened without one.
+        if (guard != null && guard.TryBeginSession(comfyPid: 0, out _))
+        {
+            var images = PythonImagePaths.ForInterpreter(effective.ResolvedPythonPath);
+            if (guard.TryBlockImages(images))
+            {
+                AppendLog(
+                    $"[comfy-tray] firewall enforcement ON: {images.Count} interpreter image(s) " +
+                    "blocked outbound before launch. Loopback and the inbound port are unaffected.");
+                return;
+            }
+        }
+
+        var reason = guard is null ? "unavailable" : guard.Availability.ToString();
+        if (effective.RequireFirewallGuard)
+        {
+            throw new InvalidOperationException(
+                $"Firewall enforcement is required but the guard service is {reason}.\n\n" +
+                "Install the ComfyTray Guard service, or turn off \"Require firewall enforcement\" " +
+                "in the configuration.");
+        }
+
+        AppendLog(
+            $"[comfy-tray] firewall enforcement requested but the guard service is {reason}; " +
+            "falling back to environment-variable isolation only. Blocking is best effort until " +
+            "the guard is available.");
     }
 
     /// <summary>
@@ -323,6 +386,9 @@ internal sealed class ComfyServerManager : IDisposable
             _historyClearTimer = null;
         }
 
+        // A crash is a teardown too: the rules must not outlive the process they were for.
+        Guard?.EndSession();
+
         historyClearTimer?.Dispose();
         outputWatcher?.Stop();
         inputWatcher?.Stop();
@@ -344,6 +410,10 @@ internal sealed class ComfyServerManager : IDisposable
         {
             process.Dispose();
         }
+
+        // After the tree is gone, so nothing is left running unguarded between the rules being
+        // removed and the process dying.
+        Guard?.EndSession();
 
         lock (_gate)
         {
@@ -443,6 +513,12 @@ internal sealed class ComfyServerManager : IDisposable
             return -1;
         }
     }
+
+    /// <summary>
+    /// Writes a line into the same buffer and event the server's own output uses, so a component
+    /// the UI owns — the guard client, say — shows up in the Logs window without its own plumbing.
+    /// </summary>
+    public void AppendExternalLog(string line) => AppendLog(line);
 
     private void AppendLog(string line)
     {
