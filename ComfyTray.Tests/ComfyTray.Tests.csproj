@@ -30,12 +30,7 @@
     behaviour the service runs. SharedSourcesArePortable in GuardPortabilityTests enforces that.
   -->
   <ItemGroup>
-    <Compile Include="..\Shared\GuardPathSet.cs" Link="Shared\GuardPathSet.cs" />
-    <Compile Include="..\Shared\GuardRuleNaming.cs" Link="Shared\GuardRuleNaming.cs" />
-    <Compile Include="..\Shared\GuardRuleRecord.cs" Link="Shared\GuardRuleRecord.cs" />
-    <Compile Include="..\Shared\FirewallHealth.cs" Link="Shared\FirewallHealth.cs" />
-    <Compile Include="..\Shared\IFirewallRuleStore.cs" Link="Shared\IFirewallRuleStore.cs" />
-    <Compile Include="..\Shared\FirewallPlan.cs" Link="Shared\FirewallPlan.cs" />
+    <Compile Include="..\Shared\*.cs" Link="Shared\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

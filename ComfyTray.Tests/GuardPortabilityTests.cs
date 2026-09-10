@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace ComfyTray.Tests;
@@ -54,7 +55,7 @@ public sealed class GuardPortabilityTests
         var violations = new List<string>();
         foreach (var source in sources)
         {
-            var text = File.ReadAllText(source);
+            var text = StripComments(File.ReadAllText(source));
             var name = Path.GetFileName(source);
 
             violations.AddRange(
@@ -68,6 +69,30 @@ public sealed class GuardPortabilityTests
             "Shared/ must stay free of Windows-only and host-dependent APIs so the guard's logic " +
             "remains testable off Windows. Move the offending code into the service or the tray:" +
             Environment.NewLine + string.Join(Environment.NewLine, violations));
+    }
+
+    /// <summary>
+    /// Removes comments so the scan sees code rather than prose. Several of these files
+    /// deliberately explain in a doc comment which API they avoid and why, and that explanation
+    /// must not read as a violation of the rule it documents.
+    ///
+    /// <para>
+    /// Deliberately simple — it is not a C# parser and does not need to be. Missing a violation
+    /// hidden inside a string literal is an acceptable cost for a tripwire; failing the build
+    /// over a sentence is not.
+    /// </para>
+    /// </summary>
+    private static string StripComments(string source)
+    {
+        var withoutBlocks = Regex.Replace(source, @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
+
+        var lines = withoutBlocks.Split('\n').Select(line =>
+        {
+            var comment = line.IndexOf("//", StringComparison.Ordinal);
+            return comment < 0 ? line : line[..comment];
+        });
+
+        return string.Join('\n', lines);
     }
 
     /// <summary>

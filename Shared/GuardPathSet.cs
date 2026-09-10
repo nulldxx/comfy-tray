@@ -138,6 +138,33 @@ internal static class GuardPathSet
     }
 
     /// <summary>
+    /// Returns everything before the last separator, or an empty string when there is none.
+    /// The Windows counterpart of the framework path helper, spelled out here because
+    /// <c>Path</c> would apply POSIX rules to these strings when the tests run on Linux.
+    /// </summary>
+    public static string DirectoryName(string normalizedPath)
+    {
+        ArgumentNullException.ThrowIfNull(normalizedPath);
+
+        var separator = normalizedPath.LastIndexOf('\\');
+        return separator <= 0 ? string.Empty : normalizedPath[..separator];
+    }
+
+    /// <summary>Joins a directory and a name with a single separator.</summary>
+    public static string Combine(string directory, string name)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(name);
+
+        if (directory.Length == 0)
+        {
+            return name;
+        }
+
+        return directory.EndsWith('\\') ? directory + name : directory + "\\" + name;
+    }
+
+    /// <summary>
     /// True when the path names one of the <see cref="NeverBlock"/> executables. Expects an
     /// already-normalised path.
     /// </summary>
