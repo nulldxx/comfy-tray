@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ComfyTray", "ComfyTray.cspr
 EndProject
 Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "ComfyTray.Installer", "ComfyTray.Installer\ComfyTray.Installer.wixproj", "{12345678-ABCD-EF01-2345-6789ABCDEF01}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ComfyTrayGuard", "ComfyTrayGuard\ComfyTrayGuard.csproj", "{C3D4E5F6-A7B8-9012-CDEF-234567890123}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ComfyTray.Tests", "ComfyTray.Tests\ComfyTray.Tests.csproj", "{B2C3D4E5-F6A7-8901-BCDE-F12345678901}"
 EndProject
 Global
@@ -40,6 +42,14 @@ Global
 		{B2C3D4E5-F6A7-8901-BCDE-F12345678901}.Release|Any CPU.Build.0 = Release|Any CPU
 		{B2C3D4E5-F6A7-8901-BCDE-F12345678901}.Release|x64.ActiveCfg = Release|Any CPU
 		{B2C3D4E5-F6A7-8901-BCDE-F12345678901}.Release|x64.Build.0 = Release|Any CPU
+		{C3D4E5F6-A7B8-9012-CDEF-234567890123}.Debug|Any CPU.ActiveCfg = Debug|x64
+		{C3D4E5F6-A7B8-9012-CDEF-234567890123}.Debug|Any CPU.Build.0 = Debug|x64
+		{C3D4E5F6-A7B8-9012-CDEF-234567890123}.Debug|x64.ActiveCfg = Debug|x64
+		{C3D4E5F6-A7B8-9012-CDEF-234567890123}.Debug|x64.Build.0 = Debug|x64
+		{C3D4E5F6-A7B8-9012-CDEF-234567890123}.Release|Any CPU.ActiveCfg = Release|x64
+		{C3D4E5F6-A7B8-9012-CDEF-234567890123}.Release|Any CPU.Build.0 = Release|x64
+		{C3D4E5F6-A7B8-9012-CDEF-234567890123}.Release|x64.ActiveCfg = Release|x64
+		{C3D4E5F6-A7B8-9012-CDEF-234567890123}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

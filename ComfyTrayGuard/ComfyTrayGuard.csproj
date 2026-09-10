@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!--
+      The -windows target framework is what attributes the whole assembly as Windows-only and so
+      silences CA1416 on the COM and P/Invoke below. Plain net10.0 would light up every call.
+    -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Platforms>x64</Platforms>
+    <RootNamespace>ComfyTray</RootNamespace>
+    <AssemblyName>ComfyTrayGuard</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!--
+      Built-in COM interop is not supported under NativeAOT and [ComImport] types are not
+      trim-safe, so this project is published framework-dependent and untrimmed. Single-file
+      publish keeps the installer's hand-written <File> elements down to two regardless.
+    -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <!--
+      CA1303 wants user-visible literals pulled into a resource table. This is a system service
+      and a command-line tool whose output is deliberately not localised — English is what ends
+      up in the event log and in a support thread.
+    -->
+    <NoWarn>$(NoWarn);CA1303</NoWarn>
+  </PropertyGroup>
+
+  <!--
+    Shared with the tray and the test project by source rather than by assembly reference. It is
+    Windows-API-free on purpose so that the guard's logic can be tested off Windows, which is
+    enforced by GuardPortabilityTests.
+  -->
+  <ItemGroup>
+    <Compile Include="..\Shared\*.cs" Link="Shared\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>
