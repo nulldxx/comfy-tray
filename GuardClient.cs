@@ -76,6 +76,9 @@ internal sealed class GuardClient : IDisposable
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(2);
 
+    /// <summary>How long a reachability answer is reused before asking again.</summary>
+    private static readonly TimeSpan ProbeCacheLifetime = TimeSpan.FromSeconds(30);
+
     private readonly Action<string> _log;
     private readonly object _gate = new();
 
@@ -84,6 +87,7 @@ internal sealed class GuardClient : IDisposable
     private Guid _sessionId;
     private long _nextRequestId;
     private Timer? _heartbeat;
+    private DateTimeOffset _lastProbe;
     private bool _disposed;
 
     public GuardClient(Action<string> log) =>
@@ -94,6 +98,11 @@ internal sealed class GuardClient : IDisposable
 
     /// <summary>Last firewall health the guard reported, or null if it has never been asked.</summary>
     public FirewallHealth? Health { get; private set; }
+
+    /// <summary>
+    /// When blocking is temporarily lifted, the moment it comes back. Null while enforcing.
+    /// </summary>
+    public DateTimeOffset? UnlockUntilUtc { get; private set; }
 
     /// <summary>True while a session is open and rules may be held on our behalf.</summary>
     public bool HasSession
@@ -129,6 +138,17 @@ internal sealed class GuardClient : IDisposable
             {
                 return Availability = GuardAvailability.Connected;
             }
+
+            // Cached, because this runs on the UI thread when the tray menu opens and a probe
+            // costs a connection attempt. A service appearing or disappearing is not something
+            // that needs noticing within the second.
+            if (Availability != GuardAvailability.Unknown &&
+                DateTimeOffset.UtcNow - _lastProbe < ProbeCacheLifetime)
+            {
+                return Availability;
+            }
+
+            _lastProbe = DateTimeOffset.UtcNow;
 
             if (!IsServiceRegistered())
             {
@@ -272,6 +292,7 @@ internal sealed class GuardClient : IDisposable
                     return false;
                 }
 
+                UnlockUntilUtc = unlocked.ExpiresUtc;
                 _log($"[guard] network allowed until {unlocked.ExpiresUtc.ToLocalTime():HH:mm:ss}");
                 return true;
             }
@@ -304,6 +325,7 @@ internal sealed class GuardClient : IDisposable
                     return false;
                 }
 
+                UnlockUntilUtc = null;
                 _log($"[guard] blocking restored — {rearmed.RulesRestored} rule(s) back in place");
                 return true;
             }
@@ -430,6 +452,13 @@ internal sealed class GuardClient : IDisposable
                     return;
                 }
 
+                // The guard re-arms on its own when an unlock expires, so this is how the tray
+                // finds out the countdown is over.
+                if (!beat.Unlocked)
+                {
+                    UnlockUntilUtc = null;
+                }
+
                 foreach (var line in beat.LogLines)
                 {
                     _log($"[guard] {line}");
@@ -516,6 +545,7 @@ internal sealed class GuardClient : IDisposable
         _heartbeat?.Dispose();
         _heartbeat = null;
         _sessionId = Guid.Empty;
+        UnlockUntilUtc = null;
         _reader = null;
         _pipe?.Dispose();
         _pipe = null;

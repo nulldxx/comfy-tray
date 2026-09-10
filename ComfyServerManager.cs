@@ -211,6 +211,55 @@ internal sealed class ComfyServerManager : IDisposable
     }
 
     /// <summary>
+    /// Applies an outbound-policy change to a running server, as far as one can be applied, and
+    /// says whether a restart is still needed.
+    ///
+    /// <para>
+    /// Turning firewall enforcement off takes effect at once: the rules are removed and the
+    /// scanning stops, which is exactly what somebody reaching for that setting mid-render wants.
+    /// Nothing else can be applied live — the environment variables are fixed when the process is
+    /// created, and turning enforcement on would need the pre-launch blocking and a job object
+    /// that already contains the running children. The job handle is deliberately left open, since
+    /// closing it would take ComfyUI down with it.
+    /// </para>
+    /// </summary>
+    /// <returns>True when ComfyUI must be restarted for the change to be fully in force.</returns>
+    public bool SetOutboundMode(OutboundMode mode)
+    {
+        JobProcessTracker? tracker;
+
+        lock (_gate)
+        {
+            if (_process == null)
+            {
+                // Nothing running, so the next start picks the new mode up regardless.
+                return false;
+            }
+
+            if (mode == OutboundMode.Firewall)
+            {
+                return true;
+            }
+
+            tracker = _tracker;
+            _tracker = null;
+        }
+
+        if (tracker == null && Guard?.HasSession != true)
+        {
+            return true;
+        }
+
+        tracker?.Dispose();
+        Guard?.EndSession();
+        AppendLog(
+            "[comfy-tray] firewall enforcement lifted; the rules are gone. The environment " +
+            "variables set at launch still apply until ComfyUI is restarted.");
+
+        return true;
+    }
+
+    /// <summary>
     /// Opens a guard session and blocks the interpreter before it runs. Caller must hold
     /// <see cref="_gate"/>.
     ///

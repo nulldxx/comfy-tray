@@ -23,7 +23,14 @@
                     <Separator/>
                     <MenuItem x:Name="PurgeItem" Header="Purge outputs &amp; history" IsCheckable="True" IsChecked="True" Click="Purge_Click"/>
                     <MenuItem x:Name="WatchLogonItem" Header="Watch for user logon" IsCheckable="True" Click="WatchLogon_Click"/>
-                    <MenuItem x:Name="BlockOutboundItem" Header="Block outbound network (best effort)" IsCheckable="True" Click="BlockOutbound_Click"/>
+                    <MenuItem x:Name="OutboundItem" Header="Outbound network" SubmenuOpened="OutboundMenu_Opened">
+                        <MenuItem x:Name="OutboundAllowItem" Header="Allowed" IsCheckable="True" Click="OutboundMode_Click" Tag="None"/>
+                        <MenuItem x:Name="OutboundEnvItem" Header="Blocked (best effort)" IsCheckable="True" Click="OutboundMode_Click" Tag="EnvironmentOnly"/>
+                        <MenuItem x:Name="OutboundFirewallItem" Header="Blocked (firewall enforced)" IsCheckable="True" Click="OutboundMode_Click" Tag="Firewall"/>
+                        <Separator/>
+                        <MenuItem x:Name="UnlockItem" Header="Allow network for 10 minutes" Click="Unlock_Click" IsEnabled="False"/>
+                        <MenuItem x:Name="GuardStatusItem" Header="Guard: not in use" IsEnabled="False"/>
+                    </MenuItem>
                     <Separator/>
                     <MenuItem Header="Configuration..." Click="Configuration_Click"/>
                     <MenuItem Header="Logs" Click="Logs_Click"/>

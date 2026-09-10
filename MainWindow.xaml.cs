@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 
@@ -35,7 +36,7 @@ internal sealed partial class MainWindow : Window
         _config = ComfyConfig.Load(out var loadError);
         PurgeItem.IsChecked = _config.PurgeOutputsAndHistory;
         WatchLogonItem.IsChecked = _config.WatchForUserLogon;
-        BlockOutboundItem.IsChecked = _config.BlockOutboundNetwork;
+        RefreshOutboundChecks();
         _server.Hooks = _hooks;
 
         // The guard's own log lines go through the same sink as everything else, so they appear
@@ -98,25 +99,107 @@ internal sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Toggles best-effort outbound blocking for the server process. The environment is fixed
-    /// when the process is created, so a change only bites on the next start — say so rather
-    /// than let the user believe a running server just changed behaviour.
+    /// Ticks the mode the configuration currently holds. Cheap enough for the constructor,
+    /// unlike <see cref="RefreshOutboundMenu"/>, which asks the guard how it is doing.
     /// </summary>
-    private void BlockOutbound_Click(object sender, RoutedEventArgs e)
+    private void RefreshOutboundChecks()
     {
-        var enabled = BlockOutboundItem.IsChecked;
-        _config.BlockOutboundNetwork = enabled;
+        var mode = _config.Mode;
+        OutboundAllowItem.IsChecked = mode == OutboundMode.None;
+        OutboundEnvItem.IsChecked = mode == OutboundMode.EnvironmentOnly;
+        OutboundFirewallItem.IsChecked = mode == OutboundMode.Firewall;
+    }
+
+    /// <summary>
+    /// Brings the whole submenu up to date, including what the guard is actually doing. Driven
+    /// from the submenu opening rather than a timer, so nothing is asked of the guard while
+    /// nobody is looking.
+    /// </summary>
+    private void RefreshOutboundMenu()
+    {
+        RefreshOutboundChecks();
+
+        var state = OutboundMenuState.For(
+            _config.Mode,
+            _guard?.Probe() ?? GuardAvailability.NotInstalled,
+            _guard?.HasSession == true,
+            _guard?.UnlockUntilUtc,
+            DateTimeOffset.UtcNow,
+            _guard?.Health);
+
+        OutboundFirewallItem.IsEnabled = state.FirewallEnabled;
+        UnlockItem.IsEnabled = state.UnlockEnabled;
+        UnlockItem.Header = state.UnlockHeader;
+        GuardStatusItem.Header = state.StatusHeader;
+    }
+
+    private void OutboundMenu_Opened(object sender, RoutedEventArgs e) => RefreshOutboundMenu();
+
+    /// <summary>
+    /// Chooses an outbound policy. The three items behave as a radio group, which WPF menus have
+    /// no notion of, so the selection is rewritten from the configuration afterwards rather than
+    /// left to the checkbox that was clicked.
+    /// </summary>
+    private void OutboundMode_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem item || item.Tag is not string tag ||
+            !Enum.TryParse<OutboundMode>(tag, out var mode))
+        {
+            return;
+        }
+
+        _config.BlockOutboundNetwork = mode != OutboundMode.None;
+        _config.EnforceWithFirewall = mode == OutboundMode.Firewall;
         _config.TrySave(out _);
 
-        if (_server.State == ComfyState.Running)
+        var restartNeeded = _server.SetOutboundMode(mode);
+        RefreshOutboundMenu();
+
+        if (mode == OutboundMode.Firewall &&
+            _guard?.Availability is not GuardAvailability.Connected)
         {
             MessageBox.Show(
-                (enabled
-                    ? "Outbound blocking will apply the next time ComfyUI starts."
-                    : "Outbound blocking will be lifted the next time ComfyUI starts.") +
-                "\n\nRestart ComfyUI from the tray menu to apply it now.",
+                "Firewall enforcement needs the ComfyTray Guard service, which is not " +
+                $"available ({GuardStatusItem.Header}).\n\n" +
+                "Run the ComfyTray installer again and tick the firewall guard. Until then " +
+                "ComfyUI is launched with best-effort blocking: environment variables that " +
+                "most Python libraries honour, but which a custom node using a raw socket " +
+                "can ignore.",
+                "ComfyUI Tray", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (restartNeeded && _server.State == ComfyState.Running)
+        {
+            MessageBox.Show(
+                "The new setting is saved, but the environment ComfyUI was launched with " +
+                "cannot be changed while it runs.\n\n" +
+                "Restart ComfyUI from the tray menu to apply it fully.",
                 "ComfyUI Tray", MessageBoxButton.OK, MessageBoxImage.Information);
         }
+    }
+
+    /// <summary>
+    /// Lifts blocking for a while, or puts it back if it is already lifted. The same item does
+    /// both, because while blocking is lifted the only thing anyone wants from it is to end that.
+    /// </summary>
+    private void Unlock_Click(object sender, RoutedEventArgs e)
+    {
+        if (_guard is null)
+        {
+            return;
+        }
+
+        if (_guard.UnlockUntilUtc is { } until && until > DateTimeOffset.UtcNow)
+        {
+            _guard.TryRearm();
+        }
+        else
+        {
+            _guard.TryUnlock(OutboundMenuState.UnlockDuration);
+        }
+
+        RefreshOutboundMenu();
     }
 
     private void WatchLogon_Click(object sender, RoutedEventArgs e)
@@ -225,7 +308,11 @@ internal sealed partial class MainWindow : Window
             MessageBox.Show(
                 $"ComfyUI Tray v{version}\n\n" +
                 "Runs the ComfyUI server headless in the background.\n\n" +
-                $"Config: {ComfyConfig.ConfigPath}",
+                $"Config: {ComfyConfig.ConfigPath}\n\n" +
+                "Firewall enforcement uses the ComfyTray Guard service, which removes its rules " +
+                "when ComfyUI stops. If rules are ever left behind — after a crash, say — clear " +
+                "them from an elevated prompt with:\n\n" +
+                "netsh advfirewall firewall delete rule group=\"ComfyTrayGuard\"",
                 "About ComfyUI Tray",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information));
