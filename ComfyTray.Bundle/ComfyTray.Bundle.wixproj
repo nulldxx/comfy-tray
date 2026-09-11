@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" InitialTargets="EnsureWixToolsetInstalled" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x64</Platform>
+    <ProductVersion>3.11</ProductVersion>
+    <ProjectGuid>{E5F6A7B8-C9D0-1234-EF01-456789ABCDEF}</ProjectGuid>
+    <SchemaVersion>2.0</SchemaVersion>
+    <!--
+      Named for what it is rather than for the released file. CI renames the output to
+      ComfyTraySetup-v<version>-x64.exe, and keeping the internal name distinct from the tray
+      MSI's ComfyTraySetup.msi avoids two projects claiming the same name.
+    -->
+    <OutputName>ComfyTrayBundle</OutputName>
+    <OutputType>Bundle</OutputType>
+    <IncludeSearchPaths>$(MSBuildThisFileDirectory)..</IncludeSearchPaths>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
+    <OutputPath>bin\$(Platform)\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Platform)\$(Configuration)\</IntermediateOutputPath>
+    <DefineConstants>Debug</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
+    <OutputPath>bin\$(Platform)\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Platform)\$(Configuration)\</IntermediateOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Bundle.wxs" />
+  </ItemGroup>
+  <ItemGroup>
+    <WixExtension Include="WixBalExtension">
+      <HintPath>$(WixExtDir)\WixBalExtension.dll</HintPath>
+      <Name>WixBalExtension</Name>
+    </WixExtension>
+    <WixExtension Include="WixUtilExtension">
+      <HintPath>$(WixExtDir)\WixUtilExtension.dll</HintPath>
+      <Name>WixUtilExtension</Name>
+    </WixExtension>
+  </ItemGroup>
+  <!--
+    Referencing both installers gives $(var.<name>.TargetPath) for the chain and makes build
+    ordering automatic: building this project alone builds the two MSIs first.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\ComfyTray.Installer\ComfyTray.Installer.wixproj">
+      <Name>ComfyTray.Installer</Name>
+      <Project>{12345678-ABCD-EF01-2345-6789ABCDEF01}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+    </ProjectReference>
+    <ProjectReference Include="..\ComfyTrayGuard.Installer\ComfyTrayGuard.Installer.wixproj">
+      <Name>ComfyTrayGuard.Installer</Name>
+      <Project>{D4E5F6A7-B8C9-0123-DEF0-3456789ABCDE}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(WixTargetsPath)" Condition=" '$(WixTargetsPath)' != '' " />
+  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\WiX\v3.x\Wix.targets" Condition=" '$(WixTargetsPath)' == '' AND Exists('$(MSBuildExtensionsPath32)\Microsoft\WiX\v3.x\Wix.targets') " />
+  <Target Name="EnsureWixToolsetInstalled" Condition=" '$(WixTargetsImported)' != 'true' ">
+    <Error Text="The WiX Toolset v3.11 build tools must be installed to build this project." />
+  </Target>
+</Project>

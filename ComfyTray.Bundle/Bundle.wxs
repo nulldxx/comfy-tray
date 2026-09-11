@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:bal="http://schemas.microsoft.com/wix/BalExtension">
+  <?include Version.wxi ?>
+  <?define BundleName="ComfyUI Tray" ?>
+  <?define Manufacturer="ComfyUI Tray" ?>
+  <!-- The bundle's own upgrade code, distinct from either MSI's. -->
+  <?define BundleUpgradeCode="9D4A61F2-7E58-4B0C-8A3D-1F62C5E90B77" ?>
+
+  <!--
+    Chains the two halves of ComfyUI Tray: the per-user tray, which needs no elevation and is
+    exactly the package that has always shipped, and the per-machine guard service, which does.
+    Splitting them this way is what keeps elevation confined to the part that genuinely needs it.
+  -->
+  <Bundle Name="$(var.BundleName)"
+          Version="$(var.ProductVersion)"
+          Manufacturer="$(var.Manufacturer)"
+          UpgradeCode="$(var.BundleUpgradeCode)"
+          IconSourceFile="..\icons\app.ico">
+
+    <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.HyperlinkLicense">
+      <!-- No licence page: the project is MIT and the text is in the repository. -->
+      <bal:WixStandardBootstrapperApplication LicenseUrl="" SuppressOptionsUI="yes" />
+    </BootstrapperApplicationRef>
+
+    <!--
+      Whether to install the guard service.
+      
+      Persisted deliberately: Burn uninstalls a chained package whose InstallCondition evaluates
+      false at any apply, so without persistence every upgrade would silently remove the guard
+      from machines that had it. Overridable so a scripted install can decline it with
+      ComfyTraySetup.exe InstallGuard=0, which is also the route for anyone who wants the tray
+      without an elevation prompt.
+    -->
+    <Variable Name="InstallGuard" Type="numeric" Value="1" Persisted="yes" bal:Overridable="yes" />
+
+    <Chain>
+      <!--
+        Per-user and unelevated, as it has always been. Burn runs it in the user's context; only
+        the guard below triggers the elevated engine, so declining the guard means no UAC prompt
+        at all.
+      -->
+      <MsiPackage Id="ComfyTrayMsi"
+                  SourceFile="$(var.ComfyTray.Installer.TargetPath)"
+                  Vital="yes"
+                  Compressed="yes"
+                  DisplayInternalUI="no"
+                  ForcePerMachine="no" />
+
+      <!--
+        Not vital: a machine where the service cannot be installed still gets a working tray with
+        environment-variable isolation, which is what it had before this existed. Failing the
+        whole install over the optional half would be the wrong trade.
+      -->
+      <MsiPackage Id="ComfyTrayGuardMsi"
+                  SourceFile="$(var.ComfyTrayGuard.Installer.TargetPath)"
+                  Vital="no"
+                  Compressed="yes"
+                  DisplayInternalUI="no"
+                  InstallCondition="InstallGuard = 1" />
+    </Chain>
+  </Bundle>
+</Wix>

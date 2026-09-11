@@ -1,0 +1,13 @@
+# WiX build outputs
+bin/
+obj/
+
+# MSI files
+*.msi
+*.wixpdb
+*.wixobj
+*.cab
+
+# Visual Studio
+.vs/
+*.exe
