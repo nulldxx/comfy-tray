@@ -26,7 +26,7 @@ public sealed class GuardSessionManagerTests
 
     private GuardSessionManager NewManager() => new(_store, () => _now);
 
-    private Guid OpenSession(GuardSessionManager manager, int pid = 1234) =>
+    private static Guid OpenSession(GuardSessionManager manager, int pid = 1234) =>
         manager.BeginSession("1.0.0", pid, 60).SessionId;
 
     [Fact]
