@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+  <?include Version.wxi ?>
+  <?define ProductName="ComfyUI Tray Guard" ?>
+  <?define Manufacturer="ComfyUI Tray" ?>
+  <!-- Its own upgrade code: this package has a lifecycle of its own and can be declined. -->
+  <?define UpgradeCode="6B1D4E7A-2C93-4F58-A0D6-59E31B7C8F42" ?>
+
+  <!--
+    The per-machine half of ComfyUI Tray. The tray itself stays a per-user, no-elevation install;
+    everything needing administrator rights is confined to this package, so declining it costs a
+    user nothing but enforcement.
+  -->
+  <Product Id="*"
+           Name="$(var.ProductName)"
+           Language="1033"
+           Version="$(var.ProductVersion)"
+           Manufacturer="$(var.Manufacturer)"
+           UpgradeCode="$(var.UpgradeCode)">
+
+    <Package InstallerVersion="500"
+             Compressed="yes"
+             InstallScope="perMachine"
+             Description="Windows Firewall enforcement service for ComfyUI Tray"
+             Manufacturer="$(var.Manufacturer)" />
+
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of $(var.ProductName) is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="CompanyFolder" Name="ComfyTray">
+          <Directory Id="GUARDINSTALLFOLDER" Name="Guard" />
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <DirectoryRef Id="GUARDINSTALLFOLDER">
+      <Component Id="GuardService" Guid="*">
+        <!--
+          One file. The guard is published as a framework-dependent single file, so its
+          dependencies, runtimeconfig and deps manifest are all inside the executable — which
+          keeps this list from drifting every time the project gains a package reference.
+        -->
+        <File Id="GuardServiceExe"
+              Name="ComfyTrayGuard.exe"
+              Source="$(var.GuardPublishDir)\ComfyTrayGuard.exe"
+              KeyPath="yes"
+              Checksum="yes" />
+
+        <ServiceInstall Id="GuardServiceInstall"
+                        Name="ComfyTrayGuard"
+                        DisplayName="ComfyUI Tray Guard"
+                        Description="Creates and removes Windows Firewall block rules for the ComfyUI process tree on behalf of ComfyUI Tray."
+                        Type="ownProcess"
+                        Start="auto"
+                        ErrorControl="normal"
+                        Account="LocalSystem"
+                        Vital="yes">
+          <!--
+            Restart on failure. The service purges every rule it owns when it starts, so a crash
+            that leaves rules behind is repaired by the restart rather than needing a reboot.
+          -->
+          <util:ServiceConfig FirstFailureActionType="restart"
+                              SecondFailureActionType="restart"
+                              ThirdFailureActionType="restart"
+                              RestartServiceDelayInSeconds="10"
+                              ResetPeriodInDays="1" />
+        </ServiceInstall>
+
+        <!--
+          Stop="both" matters: stopping the service runs its OnStop, which removes every rule it
+          owns. Wait="yes" so uninstall does not race it.
+        -->
+        <ServiceControl Id="GuardServiceControl"
+                        Name="ComfyTrayGuard"
+                        Start="install"
+                        Stop="both"
+                        Remove="uninstall"
+                        Wait="yes" />
+
+        <!--
+          Registering the event source here means the service never attempts the administrative
+          registry write that creating one at runtime would need.
+        -->
+        <util:EventSource Log="Application"
+                          Name="ComfyTrayGuard"
+                          EventMessageFile="%SystemRoot%\System32\EventCreate.exe" />
+      </Component>
+    </DirectoryRef>
+
+    <!--
+      Belt and braces on uninstall. ServiceControl above stops the service, and stopping it
+      removes its rules; this covers the case where it had already been killed rather than
+      stopped, which would otherwise leave a firewall rule behind with nothing left on the
+      machine that knows how to remove it. Sequenced before StopServices so the executable is
+      still on disk, and Return="ignore" so a failure here can never block an uninstall.
+    -->
+    <CustomAction Id="PurgeGuardRules"
+                  FileKey="GuardServiceExe"
+                  ExeCommand="--purge"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="PurgeGuardRules" Before="StopServices">REMOVE="ALL"</Custom>
+    </InstallExecuteSequence>
+
+    <Feature Id="GuardFeature" Title="Firewall enforcement service" Level="1">
+      <ComponentRef Id="GuardService" />
+    </Feature>
+
+    <!-- No UI: this package is only ever installed by the bundle. -->
+    <UIRef Id="WixUI_ErrorProgressText" />
+  </Product>
+</Wix>
