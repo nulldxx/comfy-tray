@@ -109,6 +109,12 @@ internal sealed class PipeServer : IDisposable
         "Design",
         "CA1031:DoNotCatchGeneralExceptionTypes",
         Justification = "The accept loop is the service's heart; no single failed connection may stop it.")]
+    [SuppressMessage(
+        "Reliability",
+        "CA2000:Dispose objects before losing scope",
+        Justification = "A connected pipe's ownership moves to the thread handling it, which disposes " +
+                        "it in a finally; the local is cleared at the hand-off so the catch below only " +
+                        "ever disposes a pipe that never reached a thread.")]
     private void AcceptLoop()
     {
         _log.Info($@"listening on \\.\pipe\{PipeName}");

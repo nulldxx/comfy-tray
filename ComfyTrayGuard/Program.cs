@@ -44,7 +44,8 @@ internal static class Program
         {
             // No console attached and nothing asked of us: this is the Service Control Manager
             // starting us, which is the normal case.
-            ServiceBase.Run(new GuardService(console: false));
+            using var service = new GuardService(console: false);
+            ServiceBase.Run(service);
             return 0;
         }
 
@@ -98,7 +99,7 @@ internal static class Program
         return 0;
     }
 
-    private static int List(IFirewallRuleStore store)
+    private static int List(ComFirewallRuleStore store)
     {
         var rules = store.ListGuardRules();
         if (rules.Count == 0)
@@ -123,7 +124,7 @@ internal static class Program
         return 0;
     }
 
-    private static int Block(IFirewallRuleStore store, IReadOnlyList<string> requested)
+    private static int Block(ComFirewallRuleStore store, List<string> requested)
     {
         if (requested.Count == 0)
         {
@@ -166,7 +167,7 @@ internal static class Program
                 .Concat(incoming)
                 .Distinct(StringComparer.Ordinal);
 
-    private static int Purge(IFirewallRuleStore store)
+    private static int Purge(ComFirewallRuleStore store)
     {
         var rules = store.ListGuardRules();
         foreach (var rule in rules)
@@ -182,7 +183,7 @@ internal static class Program
         return 0;
     }
 
-    private static int Health(IFirewallRuleStore store)
+    private static int Health(ComFirewallRuleStore store)
     {
         var health = store.GetHealth();
 
@@ -202,7 +203,7 @@ internal static class Program
         return 0;
     }
 
-    private static void WarnIfIneffective(IFirewallRuleStore store)
+    private static void WarnIfIneffective(ComFirewallRuleStore store)
     {
         if (store.GetHealth().DegradedReason is { } reason)
         {

@@ -20,7 +20,6 @@ namespace ComfyTray;
 internal sealed class GuardEventLog
 {
     private const string Source = "ComfyTrayGuard";
-    private const string LogName = "Application";
     private const long MaxFileBytes = 1024 * 1024;
 
     private readonly object _gate = new();

@@ -22,6 +22,9 @@ namespace ComfyTray;
 /// interpreter is blocked before it launches rather than relying on this.
 /// </para>
 /// </summary>
+[System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Performance", "CA1812:Avoid uninstantiated internal classes",
+    Justification = "Instantiated by the tray's process tracker; this source is shared with assemblies that do not use it.")]
 internal sealed class TrackedImageSet
 {
     private readonly HashSet<int> _resolvedPids = [];
