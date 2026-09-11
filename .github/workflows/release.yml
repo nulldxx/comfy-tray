@@ -79,6 +79,11 @@ jobs:
       - name: Build application
         run: dotnet build ComfyTray.csproj -c Release --no-restore -p:Version=${{ steps.version.outputs.NUMERIC_VERSION }}
 
+      - name: Build guard service
+        run: |
+          dotnet restore ComfyTrayGuard/ComfyTrayGuard.csproj
+          dotnet build ComfyTrayGuard/ComfyTrayGuard.csproj -c Release --no-restore -p:Version=${{ steps.version.outputs.NUMERIC_VERSION }}
+
       - name: Run tests
         run: dotnet test ComfyTray.Tests/ComfyTray.Tests.csproj -c Release --logger "console;verbosity=normal"
 
@@ -95,6 +100,18 @@ jobs:
             exit $LASTEXITCODE
           }
           Write-Host "WiX build completed"
+
+      - name: Build WiX Bundle
+        run: |
+          $env:PATH += ";C:\Program Files (x86)\WiX Toolset v3.11\bin"
+          Write-Host "Building the guard MSI and the bundle..."
+          # The bundle project references both installers, so this builds the guard MSI too.
+          msbuild ComfyTray.Bundle/ComfyTray.Bundle.wixproj /p:Configuration=Release /p:Platform=x64 /v:normal
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Bundle build failed with exit code: $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
+          Write-Host "Bundle build completed"
 
       - name: Verify and rename MSI file
         run: |
@@ -118,6 +135,19 @@ jobs:
             exit 1
           }
 
+          # The bundle is the full install: the tray plus the firewall guard service. The MSI
+          # above stays published as the tray-only, no-elevation route.
+          $bundlePath = "ComfyTray.Bundle/bin/x64/Release/ComfyTrayBundle.exe"
+          $bundleName = "ComfyTraySetup-v$version-x64.exe"
+
+          if (Test-Path $bundlePath) {
+            Copy-Item -Path $bundlePath -Destination $bundleName
+            Write-Host "Bundle copied as: $bundleName"
+          } else {
+            Write-Host "Bundle not found: $bundlePath"
+            exit 1
+          }
+
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -130,13 +160,29 @@ jobs:
           ## Downloads
 
           ### Windows Installer
-          - **ComfyTraySetup-v$numericVersion-x64.msi** - Windows MSI installer (64-bit)
+          - **ComfyTraySetup-v$numericVersion-x64.exe** - full install: the tray plus the ComfyTray Guard service
+          - **ComfyTraySetup-v$numericVersion-x64.msi** - the tray on its own, per-user, no administrator rights needed
+
+          ## Which one
+          The **.exe** installs the tray per-user and adds the ComfyTray Guard service per-machine,
+          so it asks for administrator rights once. The guard is what turns outbound blocking from
+          best effort into real Windows Firewall rules covering the whole ComfyUI process tree, and
+          it removes every rule it created when ComfyUI stops. To skip it, run
+          ``ComfyTraySetup-v$numericVersion-x64.exe InstallGuard=0``.
+
+          The **.msi** is the tray alone, exactly as it has always shipped: per-user, no elevation,
+          with best-effort environment-variable isolation only.
 
           ## Installation
-          1. Download the MSI installer
-          2. Run the installer
-          3. The application installs per-user (no admin required) to %LocalAppData%\Programs\ComfyTray
+          1. Download one of the installers above
+          2. Run it
+          3. The tray installs per-user to %LocalAppData%\Programs\ComfyTray
           4. Desktop and Start Menu shortcuts will be created
+
+          ## If firewall rules are ever left behind
+          The guard removes its rules when ComfyUI stops, when the tray exits, and when the service
+          starts or stops. If a crash ever strands one, clear them from an elevated prompt:
+          ``netsh advfirewall firewall delete rule group="ComfyTrayGuard"``
 
           ## System Requirements
           - **OS**: Windows 10 or later (64-bit)
@@ -159,6 +205,7 @@ jobs:
           $numericVersion = "${{ steps.version.outputs.NUMERIC_VERSION }}"
 
           $msiFile = "ComfyTraySetup-v$numericVersion-x64.msi"
-          Write-Host "Uploading MSI installer to release..."
-          gh release upload $version $msiFile --clobber
-          Write-Host "MSI installer uploaded successfully"
+          $bundleFile = "ComfyTraySetup-v$numericVersion-x64.exe"
+          Write-Host "Uploading installers to release..."
+          gh release upload $version $msiFile $bundleFile --clobber
+          Write-Host "Installers uploaded successfully"
