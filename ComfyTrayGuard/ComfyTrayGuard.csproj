@@ -29,10 +29,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- ServiceBase is not in the shared framework on .NET; this is where it lives. -->
+    <!--
+      ServiceBase is not in the shared framework and still needs this package. PipeSecurity and
+      NamedPipeServerStreamAcl are in-box on net10.0-windows, so referencing them explicitly is
+      redundant and NU1510 rejects it.
+    -->
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.1" />
-    <!-- PipeSecurity and NamedPipeServerStreamAcl, likewise. -->
-    <PackageReference Include="System.IO.Pipes.AccessControl" Version="5.0.0" />
   </ItemGroup>
 
   <!--
