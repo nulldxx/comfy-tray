@@ -9,6 +9,11 @@
     <NoWarn>$(NoWarn);NETSDK1233</NoWarn>
     <!-- Required by the [LibraryImport] source generator in JobObject and GuardClient (SYSLIB1062). -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!--
+      Symbols inside the assembly. The installer packages ComfyTray.dll and not its pdb, so
+      without this a crash report from an installed tray has no line numbers in it.
+    -->
+    <DebugType>embedded</DebugType>
     <DefaultItemExcludes>$(DefaultItemExcludes);ComfyTray.Tests\**;ComfyTrayGuard\**;ComfyTrayGuard.Installer\**;ComfyTray.Bundle\**</DefaultItemExcludes>
   </PropertyGroup>
 

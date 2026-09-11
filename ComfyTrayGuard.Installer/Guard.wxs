@@ -60,6 +60,15 @@
                         Account="LocalSystem"
                         Vital="yes">
           <!--
+            The guard cannot do anything without the Windows Firewall service, so let the SCM
+            order that start rather than having the guard demand it from inside its own. That is
+            not a nicety: during StartServices the installer holds the SCM's service-database
+            lock, and a demand-start issued from within our start would block on the very lock
+            the installer is holding while it waits for us.
+          -->
+          <ServiceDependency Id="MpsSvc" />
+
+          <!--
             Restart on failure. The service purges every rule it owns when it starts, so a crash
             that leaves rules behind is repaired by the restart rather than needing a reboot.
           -->
@@ -71,12 +80,23 @@
         </ServiceInstall>
 
         <!--
+          Start and stop are separate elements because they want opposite answers to Wait.
+
+          Nothing in the install depends on the service having reached running — it is Start="auto"
+          and the bundle marks this whole package non-vital — so waiting on the start only offers
+          the installer a way to hang.
+        -->
+        <ServiceControl Id="GuardServiceStart"
+                        Name="ComfyTrayGuard"
+                        Start="install"
+                        Wait="no" />
+
+        <!--
           Stop="both" matters: stopping the service runs its OnStop, which removes every rule it
           owns. Wait="yes" so uninstall does not race it.
         -->
-        <ServiceControl Id="GuardServiceControl"
+        <ServiceControl Id="GuardServiceStop"
                         Name="ComfyTrayGuard"
-                        Start="install"
                         Stop="both"
                         Remove="uninstall"
                         Wait="yes" />

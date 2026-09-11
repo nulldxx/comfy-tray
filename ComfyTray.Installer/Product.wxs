@@ -179,8 +179,15 @@
                   Impersonate="yes" />
 
     <InstallExecuteSequence>
+      <!--
+        UILevel = 5 confines this to a full-UI run of the MSI on its own, where the exit dialog's
+        checkbox is genuinely on screen and the user ticked it. The checkbox property above is
+        declared with a default of 1, so without this the action also fires under the Burn bundle,
+        which runs this package with no UI at all — launching the tray while the elevated engine
+        is still installing the guard it is about to go looking for.
+      -->
       <Custom Action="LaunchApplication" After="InstallFinalize">
-        WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed
+        WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed and UILevel = 5
       </Custom>
     </InstallExecuteSequence>
 

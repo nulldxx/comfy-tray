@@ -21,6 +21,13 @@
     <PublishSingleFile>true</PublishSingleFile>
     <PublishTrimmed>false</PublishTrimmed>
     <!--
+      Symbols inside the executable rather than in a .pdb beside it. A separate file is no use to
+      anybody here: the installer packages one file, so the pdb never leaves the build machine,
+      and a service that hangs on a user's box is then a stack trace with no line numbers. The
+      cost is about a hundred kilobytes of an executable nobody downloads directly.
+    -->
+    <DebugType>embedded</DebugType>
+    <!--
       CA1303 wants user-visible literals pulled into a resource table. This is a system service
       and a command-line tool whose output is deliberately not localised — English is what ends
       up in the event log and in a support thread.
