@@ -32,6 +32,10 @@ internal sealed class ComFirewallRuleStore : IFirewallRuleStore, IDisposable
     private const string PolicyProgId = "HNetCfg.FwPolicy2";
     private const string RuleProgId = "HNetCfg.FWRule";
 
+    /// <summary>The three real profiles, queried individually — the API has no "all" for these.</summary>
+    private static readonly NetFwProfileType2[] AllProfiles =
+        [NetFwProfileType2.Domain, NetFwProfileType2.Private, NetFwProfileType2.Public];
+
     private readonly object _gate = new();
     private INetFwPolicy2? _policy;
     private bool _disposed;
@@ -215,10 +219,7 @@ internal sealed class ComFirewallRuleStore : IFirewallRuleStore, IDisposable
         // Same parameterised-property shape as FirewallEnabled. Group policy taking over a
         // profile is reported as GP_OVERRIDE, and means locally created rules are stored but
         // never evaluated.
-        foreach (var profile in new[]
-                 {
-                     NetFwProfileType2.Domain, NetFwProfileType2.Private, NetFwProfileType2.Public,
-                 })
+        foreach (var profile in AllProfiles)
         {
             if (InvokeOnPolicy("LocalPolicyModifyState", profile) is int state &&
                 state == (int)NetFwModifyState.GroupPolicyOverride)
@@ -277,5 +278,7 @@ internal sealed class ComFirewallRuleStore : IFirewallRuleStore, IDisposable
             _policy = null;
             _disposed = true;
         }
+
+        GC.SuppressFinalize(this);
     }
 }

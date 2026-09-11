@@ -563,5 +563,7 @@ internal sealed class GuardClient : IDisposable
             EndSession();
             _disposed = true;
         }
+
+        GC.SuppressFinalize(this);
     }
 }

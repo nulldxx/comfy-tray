@@ -129,5 +129,7 @@ internal sealed class JobProcessTracker : IDisposable
             _timer?.Dispose();
             _timer = null;
         }
+
+        GC.SuppressFinalize(this);
     }
 }

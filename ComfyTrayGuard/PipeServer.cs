@@ -285,5 +285,6 @@ internal sealed class PipeServer : IDisposable
     public void Dispose()
     {
         _stopping.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

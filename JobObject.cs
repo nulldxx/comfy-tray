@@ -174,7 +174,11 @@ internal sealed partial class JobObject : IDisposable
         }
     }
 
-    public void Dispose() => _handle.Dispose();
+    public void Dispose()
+    {
+        _handle.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     // Layouts are the SDK's; the default sequential layout with the runtime's own padding
     // matches what the kernel expects on both x64 and ARM64.
