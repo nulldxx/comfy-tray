@@ -8,9 +8,26 @@ namespace ComfyTray;
 /// <summary>
 /// Raised when a request cannot be honoured. Carries a stable code the tray can branch on.
 /// </summary>
-internal sealed class GuardRequestException(string code, string message) : Exception(message)
+internal sealed class GuardRequestException : Exception
 {
-    public string Code { get; } = code;
+    public GuardRequestException(string code, string message)
+        : base(message) => Code = code;
+
+    public GuardRequestException()
+        : this("Unspecified", "The request could not be handled.")
+    {
+    }
+
+    public GuardRequestException(string message)
+        : this("Unspecified", message)
+    {
+    }
+
+    public GuardRequestException(string message, Exception innerException)
+        : base(message, innerException) => Code = "Unspecified";
+
+    /// <summary>A stable code the tray can branch on, independent of the wording.</summary>
+    public string Code { get; } = "Unspecified";
 }
 
 /// <summary>
@@ -50,6 +67,9 @@ internal enum SessionEndReason
 /// way for a session to end without its rules going with it.
 /// </para>
 /// </summary>
+[System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Performance", "CA1812:Avoid uninstantiated internal classes",
+    Justification = "Instantiated by the guard service; this source is shared with assemblies that do not use it.")]
 internal sealed class GuardSessionManager
 {
     /// <summary>

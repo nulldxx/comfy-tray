@@ -68,6 +68,12 @@ internal static class GuardPathSet
     /// rather than handle an exception per path.
     /// </para>
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Globalization", "CA1308:Normalize strings to uppercase",
+        Justification = "The normalised path is shown to people — in firewall rule descriptions, " +
+                        "in the tray log and in wf.msc — where an upper-cased path would be " +
+                        "markedly harder to read. It is only ever compared ordinally against " +
+                        "other values from this same method.")]
     public static string Normalize(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))

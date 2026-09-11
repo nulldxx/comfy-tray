@@ -112,7 +112,7 @@ internal sealed partial class JobObject : IDisposable
         return [];
     }
 
-    private static IReadOnlyList<int> ReadIds(nint buffer)
+    private static List<int> ReadIds(nint buffer)
     {
         var count = (int)(uint)Marshal.ReadInt32(buffer, sizeof(uint));
         var ids = new List<int>(count);
@@ -219,18 +219,22 @@ internal sealed partial class JobObject : IDisposable
         public nuint PeakJobMemoryUsed;
     }
 
+    [System.Runtime.InteropServices.DefaultDllImportSearchPaths(System.Runtime.InteropServices.DllImportSearchPath.System32)]
     [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
     private static partial nint CreateJobObjectW(nint attributes, string? name);
 
+    [System.Runtime.InteropServices.DefaultDllImportSearchPaths(System.Runtime.InteropServices.DllImportSearchPath.System32)]
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool AssignProcessToJobObject(nint job, nint process);
 
+    [System.Runtime.InteropServices.DefaultDllImportSearchPaths(System.Runtime.InteropServices.DllImportSearchPath.System32)]
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool SetInformationJobObject(
         nint job, int infoClass, nint info, uint length);
 
+    [System.Runtime.InteropServices.DefaultDllImportSearchPaths(System.Runtime.InteropServices.DllImportSearchPath.System32)]
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool QueryInformationJobObject(
@@ -245,6 +249,7 @@ internal sealed partial class SafeJobHandle : SafeHandleZeroOrMinusOneIsInvalid
 
     protected override bool ReleaseHandle() => CloseHandle(handle);
 
+    [System.Runtime.InteropServices.DefaultDllImportSearchPaths(System.Runtime.InteropServices.DllImportSearchPath.System32)]
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool CloseHandle(nint handle);

@@ -40,6 +40,7 @@ internal static partial class TrayNativeMethods
             : path;
     }
 
+    [System.Runtime.InteropServices.DefaultDllImportSearchPaths(System.Runtime.InteropServices.DllImportSearchPath.System32)]
     [System.Runtime.InteropServices.LibraryImport(
         "kernel32.dll",
         SetLastError = true,

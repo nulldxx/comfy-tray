@@ -104,6 +104,6 @@ internal static class GuardRuleNaming
     private static string HashPath(string normalizedPath)
     {
         var digest = SHA256.HashData(Encoding.UTF8.GetBytes(normalizedPath));
-        return Convert.ToHexString(digest.AsSpan(0, HashLength / 2)).ToLowerInvariant();
+        return Convert.ToHexString(digest.AsSpan(0, HashLength / 2));
     }
 }

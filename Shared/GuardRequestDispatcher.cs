@@ -6,6 +6,9 @@ namespace ComfyTray;
 /// <summary>
 /// Per-connection state. A session belongs to the connection that opened it, and dies with it.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Performance", "CA1812:Avoid uninstantiated internal classes",
+    Justification = "Instantiated by the guard service; this source is shared with assemblies that do not use it.")]
 internal sealed class GuardConnection
 {
     /// <summary>How the caller identified itself, for the log. Never used to make a decision.</summary>
@@ -29,6 +32,9 @@ internal sealed class GuardConnection
 /// against the connection's own rather than trusted.
 /// </para>
 /// </summary>
+[System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Performance", "CA1812:Avoid uninstantiated internal classes",
+    Justification = "Instantiated by the guard service; this source is shared with assemblies that do not use it.")]
 internal sealed class GuardRequestDispatcher(
     GuardSessionManager sessions,
     IFirewallRuleStore store,
@@ -100,7 +106,7 @@ internal sealed class GuardRequestDispatcher(
             "UnsupportedRequest", $"The guard does not handle {request.GetType().Name}."),
     };
 
-    private GuardResponse Hello(GuardConnection connection, HelloRequest request)
+    private HelloResponse Hello(GuardConnection connection, HelloRequest request)
     {
         if (request.ProtocolVersion != GuardProtocolVersion.Current)
         {
@@ -114,7 +120,7 @@ internal sealed class GuardRequestDispatcher(
         return new HelloResponse(GuardProtocolVersion.Current, _serviceVersion, _store.GetHealth());
     }
 
-    private GuardResponse BeginSession(GuardConnection connection, BeginSessionRequest request)
+    private BeginSessionResponse BeginSession(GuardConnection connection, BeginSessionRequest request)
     {
         if (!connection.HelloCompleted)
         {
@@ -135,7 +141,7 @@ internal sealed class GuardRequestDispatcher(
         return new BeginSessionResponse(sessionId, lease);
     }
 
-    private GuardResponse BlockImages(GuardConnection connection, BlockImagesRequest request)
+    private BlockImagesResponse BlockImages(GuardConnection connection, BlockImagesRequest request)
     {
         var (added, already, rejected) = _sessions.BlockImages(
             Owned(connection, request.SessionId), request.Paths ?? []);
@@ -143,16 +149,16 @@ internal sealed class GuardRequestDispatcher(
         return new BlockImagesResponse(added, already, rejected);
     }
 
-    private GuardResponse Unlock(GuardConnection connection, UnlockRequest request) =>
+    private UnlockResponse Unlock(GuardConnection connection, UnlockRequest request) =>
         new UnlockResponse(_sessions.Unlock(Owned(connection, request.SessionId), request.Seconds));
 
-    private GuardResponse Heartbeat(GuardConnection connection, HeartbeatRequest request)
+    private HeartbeatResponse Heartbeat(GuardConnection connection, HeartbeatRequest request)
     {
         var (expires, unlocked, lines) = _sessions.Heartbeat(Owned(connection, request.SessionId));
         return new HeartbeatResponse(expires, unlocked, lines);
     }
 
-    private GuardResponse EndSession(GuardConnection connection, EndSessionRequest request)
+    private EndSessionResponse EndSession(GuardConnection connection, EndSessionRequest request)
     {
         var sessionId = Owned(connection, request.SessionId);
         connection.SessionId = null;

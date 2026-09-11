@@ -192,11 +192,6 @@ internal sealed class ComfyServerManager : IDisposable
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
-            if (effective.Mode == OutboundMode.Firewall && Guard?.HasSession == true)
-            {
-                StartTrackingLocked(process, preBlocked);
-            }
-
             _process = process;
             SetStateLocked(ComfyState.Running);
 
@@ -206,6 +201,13 @@ internal sealed class ComfyServerManager : IDisposable
             if (_purgeEnabled)
             {
                 StartPurgingLocked();
+            }
+
+            // After the field assignment that takes ownership of the process, so that nothing
+            // between creating it and owning it can leave it undisposed.
+            if (effective.Mode == OutboundMode.Firewall && Guard?.HasSession == true)
+            {
+                StartTrackingLocked(process, preBlocked);
             }
         }
     }

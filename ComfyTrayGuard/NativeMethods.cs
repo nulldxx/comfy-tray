@@ -43,6 +43,7 @@ internal static partial class NativeMethods
         }
     }
 
+    [System.Runtime.InteropServices.DefaultDllImportSearchPaths(System.Runtime.InteropServices.DllImportSearchPath.System32)]
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool GetNamedPipeClientProcessId(nint pipe, out uint clientProcessId);
