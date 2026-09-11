@@ -178,6 +178,13 @@ internal sealed class GuardClient : IDisposable
         "Design",
         "CA1031:DoNotCatchGeneralExceptionTypes",
         Justification = "Any failure here degrades to environment-variable isolation; none may stop a launch.")]
+    [SuppressMessage(
+        "Reliability",
+        "CA2000:Dispose objects before losing scope",
+        Justification = "The pipe's ownership passes to _pipe, and every exit disposes it: the two " +
+                        "failure returns and the catch all call Disconnect, and on success it lives " +
+                        "until EndSession or Dispose. The analyzer's suggested fix — nulling the " +
+                        "local after the hand-off — is itself flagged as a redundant assignment.")]
     public bool TryBeginSession(int comfyPid, out Guid sessionId)
     {
         sessionId = Guid.Empty;
